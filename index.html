@@ -1331,7 +1331,7 @@ function advanceAge(s, i){
   sd.xp -= XP_NEED(sd.age); sd.age++; refreshMax(s);
   sfx('age'); say(`${seatName(s, i)} enters the ${AGES[sd.age].name}`, s, i);
   if (sd.age === AGES.length - 1) say(`${seatName(s, i)}'s fortress no longer repairs`, s, i);
-  renderFort(s, i); if (S.mode === 'battle') buildTrays();
+  renderFort(s, i); if (S.mode === 'battle' && localSeat(s, i)) buildTrays();   // only this phone's own controls change
   return true;
 }
 function emergencyRepair(s, i){
@@ -1410,7 +1410,7 @@ function fortFalls(s, i){
   if (!side.seats.some(o => o.alive)){ endGame(1 - s); return; }
   say(`${seatName(s, i)}'s fortress has fallen!`, s, i);
   const heirs = side.seats.filter(o => o.alive); heirs.forEach(o => o.gold += sd.gold/heirs.length); sd.gold = 0;   // survivors inherit the treasury
-  if (S.mode === 'battle') buildTrays();
+  if (S.mode === 'battle' && localSeat(s, i)) buildTrays();
 }
 function fire(side, kind, x0, z0, h0, dmg, arole, target, base, splash){
   const tx = target ? target.x : front(base) - dirOf(side)*(10 + Math.random()*50);
@@ -2452,7 +2452,10 @@ function buildTrays(){
   }
   $('#trays').hidden = S.mode === 'demo' || shown === 0;
   $('#topbar').hidden = S.mode === 'demo';
-  requestAnimationFrame(() => { layout(); openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); togglePanel(s, i, true, true); }); });
+  // reopen any upgrades panel straight away so it doesn't blink, then size it once the layout settles
+  const reopen = () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); togglePanel(s, i, true, true); });
+  reopen();
+  requestAnimationFrame(() => { layout(); reopen(); });
 }
 function togglePanel(s, i, force, quiet){
   const ui = UI[s][i]; if (!ui){ openPanels.delete(`${s}-${i}`); return; }
@@ -2802,7 +2805,7 @@ function applySnap(m){
     const sd = S.sides[s].seats[i]; if (!sd) return;
     const changed = sd.age !== o.age || sd.alive !== o.alive || sd.kind !== o.kind;
     Object.assign(sd, o);
-    if (changed){ renderFort(s, i); rebuild = true; }
+    if (changed){ renderFort(s, i); if (localSeat(s, i)) rebuild = true; }
   }));
   if (rebuild) buildTrays();
   const prev = new Map(S.units.map(u => [u.id, u]));
