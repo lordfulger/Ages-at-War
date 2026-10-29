@@ -110,6 +110,8 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   display:flex;align-items:center;justify-content:center;gap:5px}
 .sw::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--swHi)}
 .sw[hidden]{display:none!important}
+.cv{height:26px;border-radius:8px;border:1.5px solid #4a3322;background:#2b1d12;color:var(--ink);font-weight:700;font-size:13px;cursor:pointer;padding:0 2px;white-space:nowrap;overflow:hidden}
+.cv[hidden]{display:none!important}
 
 /* online play */
 .joinRow{display:grid;grid-template-columns:1fr auto;gap:8px}
@@ -241,13 +243,20 @@ details[open].card summary::after{content:" −"}
           <div class="lineup">
               <div class="sideRow" id="row-0"><div class="who" id="who-0">Blue<small>left side</small></div><button class="slot" id="slot-0-0"></button><button class="slot" id="slot-0-1"></button><button class="slot" id="slot-0-2"></button></div>
               <div class="sideRow swRow"><div></div><button class="sw" id="sw-0-0"></button><button class="sw" id="sw-0-1"></button><button class="sw" id="sw-0-2"></button></div>
+              <div class="sideRow swRow"><div></div><button class="cv" id="cv-0-0"></button><button class="cv" id="cv-0-1"></button><button class="cv" id="cv-0-2"></button></div>
               <div class="sideRow" id="row-1"><div class="who" id="who-1">Red<small>right side</small></div><button class="slot" id="slot-1-0"></button><button class="slot" id="slot-1-1"></button><button class="slot" id="slot-1-2"></button></div>
               <div class="sideRow swRow"><div></div><button class="sw" id="sw-1-0"></button><button class="sw" id="sw-1-1"></button><button class="sw" id="sw-1-2"></button></div>
+              <div class="sideRow swRow"><div></div><button class="cv" id="cv-1-0"></button><button class="cv" id="cv-1-1"></button><button class="cv" id="cv-1-2"></button></div>
           </div>
+          <p class="note" id="civNote">Tap a civilization under a commander to change it.</p>
           <p class="note" id="lineupNote"></p>
           <div id="diffBox" class="lineup">
             <div class="label">Computer skill</div>
             <div class="seg" id="diffSeg"><button class="chip" data-d="easy">Easy</button><button class="chip" data-d="normal">Normal</button><button class="chip" data-d="hard">Hard</button><button class="chip" data-d="brutal">Brutal</button><button class="chip" data-d="nightmare">Nightmare</button><button class="chip" data-d="insane">Insane</button></div>
+          </div>
+          <div class="lineup">
+            <div class="label">Game speed</div>
+            <div class="seg" id="speedSeg"><button class="chip" data-sp="1">Normal</button><button class="chip" data-sp="1.5">Fast</button><button class="chip" data-sp="2">Very fast</button></div>
           </div>
           <div class="lineup">
             <div class="label">Battlefield</div>
@@ -414,7 +423,7 @@ const UPG = {
   range:      {label:'Long Range',     base:180, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Ranged and siege reach 4% farther per level'},
   medics:     {label:'Medics',         base:160, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Troops heal in battle, faster each level'},
   plunder:    {label:'Plunder',        base:100, t0:8,  age:0, max0:1, per:1,   cap:10, desc:'+5% gold from kills per level'},
-  scholars:   {label:'Scholars',       base:150, t0:10, age:0, max0:1, per:1,   cap:10, desc:'+8% experience per level'},
+  scholars:   {label:'Scholars',       base:150, t0:10, age:0, max0:1, per:1,   cap:10, desc:'+8% experience and +12% research speed per level'},
   towers:     {label:'Sharpshooters',  base:160, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Wall defenders hit 10% harder per level'},
   walls:      {label:'Walls',          base:200, t0:10, age:0, max0:1, per:1,   cap:10, desc:'+10% fortress health per level, with repairs'},
   rapid:      {label:'Rapid Fire',     base:170, t0:10, age:1, max0:2, per:1,   cap:10, desc:'Wall defenders shoot 6% faster per level'},
@@ -432,7 +441,21 @@ const UPG = {
 };
 const UPG_KEYS = Object.keys(UPG);
 const maxLvl = (k, age) => { const U = UPG[k]; return age < U.age ? 0 : Math.min(U.cap, U.max0 + Math.floor(U.per*(age - U.age))); };
-const upTime = (k, lvl) => Math.min(30, UPG[k].t0 + 1.2*lvl);
+// each level takes longer to research than the last; Scholars speed every research up, so old upgrades you skipped catch up quickly
+const upTime = (k, lvl) => Math.min(60, UPG[k].t0 * Math.pow(1.1, lvl));
+// civilizations: small strengths, each paid for with a weakness
+const CIVS = [
+  {name:'Standard',  desc:'No strengths and no weaknesses'},
+  {name:'Warlords',  desc:'Troops hit 10% harder but are 10% less tough', dmg:1.1, hp:.9},
+  {name:'Merchants', desc:'10% more income but 15% slower research', gold:1.1, res:.85},
+  {name:'Sages',     desc:'20% faster research but 10% less income', res:1.2, gold:.9},
+  {name:'Builders',  desc:'Fortress 20% tougher but troops train 10% slower', fort:1.2, train:.9},
+  {name:'Nomads',    desc:'Troops move and train 10% faster but the fortress is 15% weaker', spd:1.1, train:1.1, fort:.85},
+  {name:'Random',    desc:'A civilization picked at random when the battle starts'}
+];
+const CIV_RANDOM = CIVS.length - 1;
+const CV = (sd, k) => (CIVS[sd.civ || 0] || CIVS[0])[k] || 1;
+const SPEEDS = {1:'Normal', 1.5:'Fast', 2:'Very fast'};
 const ROMAN = ['','I','II','III'];
 const DIFF = {
   easy:  {mult:.8,   think:1.3, smart:.4,  def:1, waves:false, xp:1},
@@ -1215,6 +1238,9 @@ const validLineup = l => Array.isArray(l) && l.length === 2 && l.every(side => A
   side.every(k => k === 'human' || k === 'cpu' || k === 'online') && side.filter(k => k === 'human').length <= 2);
 let lineup = store.get('lineup', null); if (!validLineup(lineup)) lineup = [['human'],['cpu']];
 let diff = store.get('diff', 'normal'); if (!DIFF[diff]) diff = 'normal';
+const validCivs = c => Array.isArray(c) && c.length === 2 && c.every(r => Array.isArray(r) && r.length === 3 && r.every(k => Number.isInteger(k) && k >= 0 && k < CIVS.length));
+let civs = store.get('civs', null); if (!validCivs(civs)) civs = [[0,0,0],[0,0,0]];
+let speedPick = store.get('speed', 1); if (!SPEEDS[speedPick]) speedPick = 1;
 let mapPick = store.get('map', 'random'); if (mapPick !== 'random' && !MAPS.includes(mapPick)) mapPick = 'random';
 const KIND_LABEL = {human:'Player', cpu:'CPU', none:'Empty', online:'Online', remote:'Online'};
 function renderLineup(){
@@ -1231,6 +1257,7 @@ function renderLineup(){
   $('#diffBox').hidden = cpus === 0;
   [...$('#diffSeg').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.d === diff));
   [...$('#mapSeg').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mapPick));
+  [...$('#speedSeg').children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.sp === speedPick));
   let note = humans === 0 ? 'No players: sit back and watch the computers fight.' : `${humans} player${humans > 1 ? 's' : ''} on one phone, held sideways.`;
   if (lineup[0].includes('human') && lineup[1].includes('human')) note += ' Blue uses the controls on the left, Red on the right.';
   if (lineup.some(side => side.filter(k => k === 'human').length === 2)) note += ' Teammates split their side, and each has their own gold, age, upgrades and fortress.';
@@ -1238,10 +1265,10 @@ function renderLineup(){
   if (n0 !== n1){ const big = n0 > n1 ? 0 : 1; note += ` Uneven fight: ${SIDE_NAME[big]} has ${Math.max(n0, n1)} commanders and earns about ${Math.round((Math.sqrt(Math.max(n0, n1)/Math.min(n0, n1)) - 1)*100)}% more gold.`; }
   $('#lineupNote').textContent = note;
   renderSwatches(); netLobby(); netShow();
-  store.set('lineup', lineup); store.set('diff', diff); store.set('map', mapPick);
+  store.set('lineup', lineup); store.set('diff', diff); store.set('map', mapPick); store.set('civs', civs); store.set('speed', speedPick);
 }
 $('#menu').addEventListener('click', e => {
-  const slot = e.target.closest('.slot'), chip = e.target.closest('[data-p]'), d = e.target.closest('[data-d]'), m = e.target.closest('[data-m]');
+  const slot = e.target.closest('.slot'), chip = e.target.closest('[data-p]'), d = e.target.closest('[data-d]'), m = e.target.closest('[data-m]'), sp = e.target.closest('[data-sp]');
   if (slot && !slot.disabled){
     const [, s, i] = slot.id.split('-').map(Number), side = lineup[s], cur = side[i] || 'none';
     const humansElsewhere = side.filter((k, j) => j !== i && k === 'human').length;
@@ -1255,7 +1282,8 @@ $('#menu').addEventListener('click', e => {
   if (chip) lineup = JSON.parse(JSON.stringify(PRESETS[+chip.dataset.p][1]));
   if (d) diff = d.dataset.d;
   if (m) mapPick = m.dataset.m;
-  if (slot || chip || d || m){ audioInit(); renderLineup(); }
+  if (sp) speedPick = +sp.dataset.sp;
+  if (slot || chip || d || m || sp){ audioInit(); renderLineup(); }
   if (m) previewMap();
 });
 
@@ -1266,12 +1294,13 @@ function newSeat(kind, n){
   return {kind, gold: Math.round(150/Math.sqrt(n)), q:[], qt:0, def:0, up:Object.fromEntries(UPG_KEYS.map(k => [k, 0])), res:[], bar:20, aiT: 1 + Math.random(), bank:0,
     hp, max:hp, alive:true, shake:0, defT:1, defK:0, lastHit:-99, age:0, xp:0};
 }
-function newGame(mode, lu, map, cols, cycle){
+function newGame(mode, lu, map, cols, cycle, civs, speed){
   L = 2000 + FORT*(lu[0].length + lu[1].length);
   applyColors(cols);
-  S = {v:8, mode, diff, lineup: lu, cols, map, cycle, t:0, nextId:1, over:-1, units:[], shots:[], fx:[], msgs:[], shake:0,
-       sides: lu.map(seats => ({seats: seats.map(k => newSeat(k, seats.length))}))};
+  S = {v:8, mode, diff, lineup: lu, cols, map, cycle, civs, speed: SPEEDS[speed] ? speed : 1, t:0, nextId:1, over:-1, units:[], shots:[], fx:[], msgs:[], shake:0,
+       sides: lu.map((seats, s) => ({seats: seats.map((k, i) => ({...newSeat(k, seats.length), civ: civs ? civs[s][i] || 0 : 0}))}))};
   cam.x = 0; cam.manual = 0;
+  S.sides.forEach((side, s) => { refreshMax(s); side.seats.forEach(sd => sd.hp = sd.max); });   // civilizations change fortress health
   const start = mode === 'battle' && DIFF[diff] && DIFF[diff].start;   // the toughest computers begin with a head start
   if (start) S.sides.forEach(side => side.seats.forEach(sd => { if (sd.kind === 'cpu') sd.gold = Math.round(sd.gold*start); }));
 }
@@ -1283,20 +1312,21 @@ function sideAge(s){ const ages = S.sides[s].seats.filter(sd => sd.alive).map(sd
 function fortFrac(s){ const sd = S.sides[s].seats[frontSeat(s)]; return sd.hp/sd.max; }
 const isAI = sd => sd.kind === 'cpu';
 const share = s => 1/Math.sqrt(S.sides[s].seats.length);   // more commanders means more gold in total, but not double
-const income = (sd, s) => Math.round((10 + sd.up.trade*3) * PRICE(sd.age) * share(s));
+const income = (sd, s) => Math.round((10 + sd.up.trade*3) * PRICE(sd.age) * share(s) * CV(sd, 'gold'));
 const sideUp = (s, k) => Math.max(...S.sides[s].seats.map(sd => sd.up[k]));
 const defenders = (s, i) => 2 + S.sides[s].seats[i].def;
 const live = () => S && S.over < 0 && !paused;
 const can = sd => !!sd && sd.alive && live();
 const upCost = (sd, k, lvl) => round5(UPG[k].base * (1 + .35*lvl) * PRICE(sd.age));
 const qCap = sd => 5 + sd.up.logistics;
-const trainTime = (sd, it) => STATS[it.a][it.r].train / (1 + .06*sd.up.drill);
+const trainTime = (sd, it) => STATS[it.a][it.r].train / ((1 + .06*sd.up.drill) * CV(sd, 'train'));
+const resSpeed = sd => (1 + .12*sd.up.scholars) * CV(sd, 'res');
 const defMax = sd => DEF_COST.length + sd.up.garrison;
 const defCost = (sd, n) => round5((DEF_COST[n] || DEF_COST[DEF_COST.length - 1]*Math.pow(1.3, n - DEF_COST.length + 1)) * PRICE(sd.age));
 const barrageCd = sd => 45 / (1 + .1*sd.up.barrage);
 const humanSide = s => NET.role === 'client' && NET.mySeat ? s === NET.mySeat[0] : S.sides[s].seats.some(sd => sd.kind === 'human' || sd.kind === 'remote');
-function xpMult(s, sd){ const D = DIFF[S.diff] || DIFF.normal; return (1 + .08*sd.up.scholars) * (S.mode === 'battle' && !humanSide(s) ? D.xp : 1); }
-function maxHp(s, i){ const side = S.sides[s], sd = side.seats[i]; return Math.round(BASE_HP * Math.pow(1.35, sd.age) * (1 + .1*sd.up.walls)); }
+function xpMult(s, sd){ const D = DIFF[S.diff] || DIFF.normal; return (1 + .08*sd.up.scholars) * CV(sd, 'xp') * (S.mode === 'battle' && !humanSide(s) ? D.xp : 1); }
+function maxHp(s, i){ const side = S.sides[s], sd = side.seats[i]; return Math.round(BASE_HP * Math.pow(1.35, sd.age) * (1 + .1*sd.up.walls) * CV(sd, 'fort')); }
 function refreshMax(s){ S.sides[s].seats.forEach((sd, i) => { if (!sd.alive) return; const m = maxHp(s, i); sd.hp = Math.min(m, sd.hp + Math.max(0, m - sd.max)); sd.max = m; }); }
 function say(txt, s, i){ S.msgs.push({txt, col: s == null ? '#f6ead2' : PAL[s][i || 0].hi, t:0, dur:2.8}); if (S.msgs.length > 3) S.msgs.shift(); }
 const tag = s => humanSide(0) && humanSide(1) ? `${SIDE_NAME[s]}: ` : '';
@@ -1382,9 +1412,9 @@ function spawn(s, i, it){
   const st = STATS[it.a][it.r], sd = S.sides[s].seats[i], n = S.sides[s].seats.length;
   const U = sd.up, role = it.r;
   const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
-  const z = (i + Math.random())/n, hp = st.hp * hpM;
+  const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp');
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
-    atk:.2, dm:1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0), spd:1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0),
+    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * CV(sd, 'dmg'), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
     rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
@@ -1484,7 +1514,7 @@ function aiThink(s, i){
   const army = mine.filter(u => u.seat === i).length + me.q.length;
   if (!army && me.gold >= STATS[age].inf.cost){ queueUnit(s, i, 'inf'); return; }
   if (army >= 3 && me.res.length < (D.waves ? 2 : 1) && (!close.length || D.waves) && S.t > 5){
-    const W = {trade:1.5, weapons:1.3, armor:1.3, shields:1.4, formation:1.1, scholars:1.1, ballistics:1, mounts:1, drill:1, medics:.9, logistics:.9,
+    const W = {trade:1.5, weapons:1.3, armor:1.3, shields:1.4, formation:1.1, scholars:1.3, ballistics:1, mounts:1, drill:1, medics:.9, logistics:.9,
       range: turtle ? 2 : .8, engineering: turtle ? 2 : .7, march:.7, plunder:.6, towers:.7, barrage:.7, watch:.6, walls:.5, rapid:.6, pitch:.5, garrison:.4, gate:.6};
     let pickU = null, bs = 1e9, pl = 0;
     for (const k of UPG_KEYS){
@@ -1552,7 +1582,7 @@ function update(dt){
       sd.xp += dt * 3 * Math.pow(1.3, maxAge) * xpMult(s, sd);  // paced by the leader so anyone behind can catch up
       sd.gold += income(sd, s) * dt * (isAI(sd) && S.mode === 'battle' ? D.mult : 1);
       if (sd.q.length){ sd.qt += dt; const it = sd.q[0]; if (sd.qt >= trainTime(sd, it)){ spawn(s, i, sd.q.shift()); sd.qt = 0; } }
-      if (sd.res.length){ const r = sd.res[0]; r.t += dt; if (r.t >= r.dur) finishResearch(s, sd); }
+      if (sd.res.length){ const r = sd.res[0]; r.t += dt * resSpeed(sd); if (r.t >= r.dur) finishResearch(s, sd); }
       if (sd.bar > 0) sd.bar -= dt;
       if (isAI(sd)){ sd.aiT -= dt; if (sd.aiT <= 0){ sd.aiT = (S.mode === 'demo' ? .75 : D.think) * (.7 + Math.random()*.6); aiThink(s, i); } }
       const gate = gateX(s, i);
@@ -2427,12 +2457,20 @@ function renderSwatches(){
       b.hidden = !lineup[s][i];
       b.style.setProperty('--sw', col.base); b.style.setProperty('--swHi', col.hi); b.style.setProperty('--swInk', inkOn(col));
       b.textContent = col.name; b.setAttribute('aria-label', `Commander ${i + 1} color: ${col.name}. Tap to change.`);
+      const cv = $(`#cv-${s}-${i}`), civ = CIVS[civs[s][i]];
+      cv.hidden = !lineup[s][i]; cv.textContent = civ.name; cv.title = civ.desc;
+      cv.setAttribute('aria-label', `Commander ${i + 1} civilization: ${civ.name}, ${civ.desc}. Tap to change.`);
     }
   }
   setToggles();
 }
 $('#menu').addEventListener('click', e => {
-  const b = e.target.closest('.sw'), ct = e.target.closest('#cycleT');
+  const b = e.target.closest('.sw'), ct = e.target.closest('#cycleT'), cv = e.target.closest('.cv');
+  if (cv){
+    const [, s, i] = cv.id.split('-').map(Number); civs[s][i] = (civs[s][i] + 1) % CIVS.length;
+    const civ = CIVS[civs[s][i]]; $('#civNote').textContent = `${civ.name}: ${civ.desc}.`;
+    store.set('civs', civs); renderSwatches(); netLobby(); sfx('click');
+  }
   if (b){
     const [, s, i] = b.id.split('-').map(Number), used = new Set(colors.flat()), start = colors[s][i];
     let k = start; do { k = (k + 1) % COLORS.length; } while (used.has(k) && k !== start);
@@ -2596,12 +2634,14 @@ function startDemo(){
 }
 function startBattle(){
   audioInit();
-  newGame('battle', playLineup(), pickMap(), JSON.parse(JSON.stringify(colors)), cyclePick); paused = false;
+  const civPick = civs.map(row => row.map(k => k === CIV_RANDOM ? Math.floor(Math.random()*CIV_RANDOM) : k));
+  newGame('battle', playLineup(), pickMap(), JSON.parse(JSON.stringify(colors)), cyclePick, civPick, speedPick); paused = false;
   openPanels.clear(); buildTrays(); layout();
   document.body.classList.add('battle');
   $('#menu').hidden = true; $('#pauseOv').hidden = true; $('#endOv').hidden = true;
   A.mode = 'battle'; setAmbience(); keepAwake();
   say('Stone Age · train your first warriors');
+  S.sides.forEach((side, s) => side.seats.forEach((sd, i) => { if (sd.kind === 'human' && sd.civ) say(`${seatName(s, i)}: ${CIVS[sd.civ].name}. ${CIVS[sd.civ].desc}`, s, i); }));
   netStart();
 }
 function togglePause(on){
@@ -2649,7 +2689,8 @@ function buildGuide(){
     ['siege', 'Siege', 'Long range and wrecks forts, but cannot hit anything close. Guard it.'],
     ['support', 'Healer', 'Heals the most hurt troops nearby and stays behind the front line.'],
     ['@barrage', 'Barrage', 'Free bombardment that recharges. Rocks in the Stone Age, orbital strikes in the Future.'],
-    ['@star', 'Upgrades', 'Twenty-three upgrades. Every age raises their level caps, and new ones unlock along the way.'],
+    ['@star', 'Upgrades', 'Twenty-three upgrades. Every age raises their level caps, and new ones unlock along the way. Each level takes longer to research; Scholars speed all research up.'],
+    ['@armor', 'Civilizations', 'Pick one for each commander in setup. Each has a small strength paid for with a weakness.'],
     ['@age', 'Advance age', 'Fill the experience bar, then enter the next age. After the Future, experience buys Veteran Ranks: each makes new troops 4% stronger.'],
     ['@repair', 'Emergency repair', 'Restores 35% of your fortress, once per battle.'],
     ['@towers', 'Fortresses', 'Every commander has one. The front fortress is attacked first; a side loses when its last one falls.']
@@ -2758,13 +2799,13 @@ function onHostData(conn, m){
 }
 function netLobby(){
   if (NET.role !== 'host') return;
-  for (const c of NET.conns){ const key = ownerKey(c.peer); if (c.open) try { c.send({t:'lobby', seat: key ? key.split('-').map(Number) : null, cols: colors}); } catch(e){} }
+  for (const c of NET.conns){ const key = ownerKey(c.peer); if (c.open) try { c.send({t:'lobby', seat: key ? key.split('-').map(Number) : null, cols: colors, civs}); } catch(e){} }
 }
 function netStart(){
   if (NET.role !== 'host') return;
   for (const c of NET.conns){
     const key = ownerKey(c.peer); if (!key || !c.open) continue;
-    c.send({t:'start', seat:key.split('-').map(Number), lineup:S.lineup, cols:S.cols, map:S.map, cycle:S.cycle, diff:S.diff});
+    c.send({t:'start', seat:key.split('-').map(Number), lineup:S.lineup, cols:S.cols, map:S.map, cycle:S.cycle, diff:S.diff, civs:S.civs, speed:S.speed});
   }
   NET.snapT = 0;
 }
@@ -2800,7 +2841,8 @@ function onClientData(m){
   if (m.t === 'lobby'){
     if (S && S.mode === 'battle') startDemo();
     const seat = m.seat;
-    netStatus(seat ? `Joined room ${NET.code} as ${COLORS[m.cols[seat[0]][seat[1]]].name}, on the ${COLORS[m.cols[seat[0]][0]].name} side. Waiting for the host to start…` : `Joined room ${NET.code}. Waiting for the host…`);
+    const civ = seat && m.civs && CIVS[m.civs[seat[0]][seat[1]]];
+    netStatus(seat ? `Joined room ${NET.code} as ${COLORS[m.cols[seat[0]][seat[1]]].name}${civ ? ` (${civ.name})` : ''}, on the ${COLORS[m.cols[seat[0]][0]].name} side. Waiting for the host to start…` : `Joined room ${NET.code}. Waiting for the host…`);
     return;
   }
   if (m.t === 'start'){ clientStart(m); return; }
@@ -2809,7 +2851,7 @@ function onClientData(m){
 }
 function clientStart(m){
   NET.mySeat = m.seat; diff = m.diff || diff;
-  newGame('battle', m.lineup, m.map, m.cols, m.cycle);
+  newGame('battle', m.lineup, m.map, m.cols, m.cycle, validCivs(m.civs) ? m.civs : null, m.speed);
   paused = false; openPanels.clear(); buildTrays(); layout();
   document.body.classList.add('battle');
   $('#menu').hidden = true; $('#pauseOv').hidden = true; $('#endOv').hidden = true;
@@ -2941,8 +2983,9 @@ function musicAge(){ const hs = [0,1].filter(humanSide), list = hs.length ? hs :
 function frame(now){
   const dt = Math.min(.05, (now - last)/1000); last = now;
   const blocked = S && S.mode === 'battle' && portrait.matches;
-  if (NET.role === 'client' && S && S.mode === 'battle') clientStep(dt);
-  else if (S && !paused && S.over < 0 && !blocked) update(dt);
+  const sp = S && S.mode === 'battle' ? S.speed || 1 : 1, steps = sp > 1 ? 2 : 1;   // faster games take two smaller steps a frame
+  if (NET.role === 'client' && S && S.mode === 'battle') clientStep(dt*sp);
+  else if (S && !paused && S.over < 0 && !blocked) for (let k = 0; k < steps && S.over < 0; k++) update(dt*sp/steps);
   else if (S && S.over >= 0){ for (const f of S.fx) f.t += dt; S.fx = S.fx.filter(f => f.t < f.dur); }
   if (S){ moveCam(dt); A.nextStyle = styleForAge(musicAge()); }
   draw(); drawPreview();
