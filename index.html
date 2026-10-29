@@ -57,7 +57,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .qtxt{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;margin-left:auto}
 .qbar{flex:0 0 22%;height:6px;border-radius:3px;background:rgba(0,0,0,.45);overflow:hidden;box-shadow:0 0 0 1px rgba(246,234,210,.25)}
 .qbar i{display:block;height:100%;background:#3fbf55;transform-origin:left;transform:scaleX(var(--p,0))}
-.units,.extras{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.units,.extras{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
 .btn{position:relative;overflow:hidden;border:1.5px solid var(--edge);border-bottom:3px solid var(--team);
   background:linear-gradient(var(--btn-a),var(--btn-b));box-shadow:inset 0 1px 0 rgba(255,220,150,.25),0 2px 5px rgba(0,0,0,.55);
   border-radius:10px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
@@ -73,13 +73,13 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .btn .prog{position:absolute;left:0;bottom:0;height:3px;width:100%;background:#3fbf55;transform-origin:left;transform:scaleX(var(--p,0))}
 .btn.glow{box-shadow:0 0 0 2px var(--gold),0 0 12px rgba(242,193,78,.7)}
 .btn:active:not(.off){filter:brightness(1.25)}
-.duo .units{grid-template-columns:repeat(3,1fr)}
+.duo .units{grid-template-columns:repeat(4,1fr)}
 .duo .btn.unit{height:clamp(40px,11vh,60px)}
 .duo .qbar{display:none}
 
 /* upgrades panel, opened from a seat's star button */
 .seat{position:relative}
-.extras{grid-template-columns:repeat(4,1fr)}
+.extras{grid-template-columns:repeat(5,1fr)}
 .upPanel{position:absolute;bottom:calc(100% + 6px);left:0;width:max(100%,min(340px,92vw));overflow-y:auto;z-index:4;
   background:rgba(24,16,9,.96);border:1.5px solid var(--edge);border-radius:12px;padding:8px;display:grid;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
 #tray1 .upPanel{left:auto;right:0}
@@ -170,7 +170,7 @@ details[open].card summary::after{content:" −"}
 .age{display:grid;gap:4px}
 .age b{font:900 13px/1.1 var(--display);color:var(--gold)}
 .age .row{display:flex;gap:2px}
-.age img{width:20%;aspect-ratio:1;object-fit:contain;background:rgba(255,255,255,.04);border-radius:4px}
+.age img{width:14%;aspect-ratio:1;object-fit:contain;background:rgba(255,255,255,.04);border-radius:4px}
 .guide{display:grid;grid-template-columns:28px 1fr;gap:6px 10px;align-items:center;font-size:16px;line-height:1.25}
 .guide svg{width:24px;height:24px;margin:auto;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .guide span{color:var(--muted)}
@@ -274,8 +274,8 @@ details[open].card summary::after{content:" −"}
         <div class="card">
           <div class="guide" id="guide"></div>
           <p class="note">Tap a troop to pay for it and add it to your training line. Fighting earns experience; when the hourglass glows, tap it to enter the next age with stronger troops and a new fortress. Kills pay back 20% of a troop's cost. Drag the battlefield or tap the map at the top to look around.</p>
-          <p class="note">The star button opens your upgrades. Each new age raises how far every upgrade can go and unlocks new ones, nineteen in all. You can line up three at a time. With more commanders on one side, that side earns more gold in total, so 1 vs 2 or 1 vs 3 is a real underdog fight.</p>
-          <p class="note">On a computer: 1–5 train troops, X cancel, Q defender, W barrage, E upgrades, A advance age.</p>
+          <p class="note">The star button opens your upgrades. Each new age raises how far every upgrade can go and unlocks new ones, twenty-three in all. You can line up three at a time. With more commanders on one side, that side earns more gold in total, so 1 vs 2 or 1 vs 3 is a real underdog fight.</p>
+          <p class="note">On a computer: 1–7 train troops, X cancel, Q defender, W barrage, E upgrades, R emergency repair, A advance age.</p>
         </div>
         <div class="card"><div class="label">The ten ages</div><div class="ages" id="agesList"></div></div>
       </section>
@@ -312,18 +312,30 @@ const $ = s => document.querySelector(s);
 
 /* =================== rules =================== */
 let L = 2400;   // grows with the number of fortresses
-const FORT = 200, BASE_HP = 6000, DEF_RANGE = 340;
+const FORT = 200, BASE_HP = 9000, DEF_RANGE = 340;
 const dirOf = s => s === 0 ? 1 : -1;
-const ROLES = ['inf','rng','fast','heavy','siege'];
+const ROLES = ['inf','rng','fast','heavy','siege','pike','support'];
+const ROLE_UI = ['inf','pike','rng','fast','heavy','siege','support'];   // order on the buttons
 const ROLE = {
-  inf:  {cost:40,  hp:90,  dmg:14, rate:.8,  range:26,  speed:55, train:1.4, r:14},
-  rng:  {cost:60,  hp:55,  dmg:11, rate:1.2, range:210, speed:48, train:2,   r:14},
+  inf:  {cost:40,  hp:85,  dmg:12, rate:.8,  range:26,  speed:55, train:1.4, r:14},
+  rng:  {cost:60,  hp:60,  dmg:16, rate:1.2, range:210, speed:48, train:2,   r:14},
   fast: {cost:110, hp:210, dmg:20, rate:.9,  range:34,  speed:95, train:3,   r:26},
   heavy:{cost:250, hp:620, dmg:38, rate:1.4, range:38,  speed:38, train:6,   r:34, trample:50},
-  siege:{cost:200, hp:150, dmg:55, rate:3.2, range:400, speed:30, train:6,   r:28, splash:60, siege:2}
+  siege:{cost:220, hp:120, dmg:50, rate:3.6, range:400, speed:28, train:6.5, r:28, splash:50, siege:2.2, minRange:140},
+  pike: {cost:55,  hp:120, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
+  support:{cost:65, hp:70, dmg:0,  rate:1.1, range:0,   speed:46, train:2.2, r:14, healer:18}
 };
-const BONUS = {inf:{fast:1.7, heavy:1.8}, fast:{rng:1.6, siege:1.6}, rng:{inf:1.3}, heavy:{fast:1.4, rng:1.2}};
-const ROLE_HINT = {inf:'cheap, beats fast and heavy troops', rng:'attacks from range, beats cheap fighters', fast:'quick, beats ranged and siege', heavy:'very tough, tramples groups', siege:'long range, double damage to forts'};
+// who beats whom: pikes stop riders and heavies, ranged troops shoot down pikes and fighters, riders run down
+// ranged troops, siege and healers, heavies trample fighters, and fighters overrun siege engines
+const BONUS = {
+  inf:  {siege:1.8, support:1.6, rng:1.2, heavy:.7, fast:.9},
+  rng:  {inf:1.5, pike:1.7, support:1.3, fast:.7},
+  fast: {rng:1.8, siege:2, support:1.6, pike:.55, inf:1.2},
+  pike: {fast:2, heavy:2.4, inf:.8},
+  heavy:{inf:1.6, rng:1.3, support:1.5, pike:.6},
+  siege:{heavy:1.3, inf:.6, rng:.6, fast:.45, pike:.6, support:.6, siege:.8}
+};
+const ROLE_HINT = {inf:'all-round fighters, beat siege and healers, weak to heavies', pike:'beat fast and heavy troops, weak to ranged', rng:'attack from range, beat fighters and pikes, weak to riders', fast:'quick raiders, beat ranged, siege and healers, weak to pikes', heavy:'very tough, trample fighters, weak to pikes', siege:'long range and wrecks forts, but helpless up close', support:'heals nearby troops and never attacks'};
 const AGES = [
   {name:'Stone Age',   gear:['hair','fur'],        fort:'cave',    units:[
     ['Clubman',{f:'p',w:'club'}], ['Rock Thrower',{f:'p',w:'rock'},'rock'], ['Wolf Rider',{f:'m',m:'wolf',w:'club'}], ['Mammoth',{f:'m',m:'mammoth',w:'spear'}], ['Boulder Sling',{f:'s',s:'lever'},'boulder']]},
@@ -346,12 +358,28 @@ const AGES = [
   {name:'Future',      gear:['visor','suit'],      fort:'citadel', units:[
     ['Blade Trooper',{f:'p',w:'blade'}], ['Plasma Gunner',{f:'p',w:'laser'},'laser'], ['Hoverbike',{f:'v',v:'hover'}], ['Mech Walker',{f:'v',v:'mech'}], ['Ion Cannon',{f:'s',s:'ion'},'plasma']]}
 ];
+// pike and healer troops for every age
+[
+  [['Spear Hunter',{f:'p',w:'pike'}], ['Shaman',{f:'p',w:'staff'}]],
+  [['Long Spearman',{f:'p',w:'pike'}], ['Priest',{f:'p',w:'staff'}]],
+  [['Phalangite',{f:'p',w:'pike'}], ['Medicus',{f:'p',w:'kit'}]],
+  [['Halberdier',{f:'p',w:'pike'}], ['Monk',{f:'p',w:'staff'}]],
+  [['Pikeman',{f:'p',w:'pike'}], ['Barber Surgeon',{f:'p',w:'kit'}]],
+  [['Rocketeer',{f:'p',w:'launcher'}], ['Field Surgeon',{f:'p',w:'kit'}]],
+  [['Anti-Tank Rifleman',{f:'p',w:'gun'}], ['Nurse',{f:'p',w:'kit'}]],
+  [['Anti-Tank Gunner',{f:'p',w:'launcher'}], ['Medic',{f:'p',w:'kit'}]],
+  [['Missile Team',{f:'p',w:'launcher'}], ['Combat Medic',{f:'p',w:'kit'}]],
+  [['Pulse Lancer',{f:'p',w:'launcher'}], ['Nanomedic',{f:'p',w:'kit'}]]
+].forEach((extra, k) => AGES[k].units.push(...extra));
+AGES[4].units[0] = ['Rodelero',{f:'p',w:'sword'}];   // the Renaissance pikeman now has his own slot
 const POW = a => Math.pow(1.35, a), PRICE = a => Math.pow(1.3, a);
-const XP_NEED = a => Math.round(400 * Math.pow(1.45, a));
+const XP_NEED = a => Math.round(900 * Math.pow(1.33, a));
+const RANK_NEED = r => Math.round(9000 * Math.pow(1.15, r));
 const round5 = n => Math.max(5, Math.round(n/5)*5);
 const STATS = AGES.map((A, a) => Object.fromEntries(ROLES.map((r, k) => {
   const R = ROLE[r], [name, d, proj] = A.units[k];
-  return [r, {...R, name, d, proj, role:r, age:a, cost:round5(R.cost*PRICE(a)), hp:R.hp*POW(a), dmg:R.dmg*POW(a)}];
+  const sure = r === 'rng' && (proj === 'bullet' || proj === 'laser') ? .8 : 1;
+  return [r, {...R, name, d, proj, role:r, age:a, cost:round5(R.cost*PRICE(a)), hp:R.hp*POW(a), dmg:R.dmg*POW(a)*sure}];
 })));
 const DEF_COST = [100,150,200,250];
 // every age raises each upgrade's level cap; later ages unlock new upgrades
@@ -367,11 +395,15 @@ const UPG = {
   scholars:   {label:'Scholars',       base:150, t0:10, age:0, max0:1, per:1,   cap:10, desc:'+8% experience per level'},
   towers:     {label:'Sharpshooters',  base:160, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Wall defenders hit 10% harder per level'},
   walls:      {label:'Walls',          base:200, t0:10, age:0, max0:1, per:1,   cap:10, desc:'+10% fortress health per level, with repairs'},
+  rapid:      {label:'Rapid Fire',     base:170, t0:10, age:1, max0:2, per:1,   cap:10, desc:'Wall defenders shoot 6% faster per level'},
+  pitch:      {label:'Boiling Oil',    base:200, t0:12, age:2, max0:1, per:1,   cap:8,  desc:'Burns enemies attacking your gate, more each level'},
+  garrison:   {label:'Garrison',       base:260, t0:14, age:3, max0:1, per:.5,  cap:4,  desc:'Room for one more wall defender per level'},
+  gate:       {label:'Iron Gate',      base:240, t0:12, age:4, max0:1, per:1,   cap:8,  desc:'Your fortress takes 5% less damage per level'},
   barrage:    {label:'Bombardment',    base:200, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Barrages hit harder and recharge faster'},
   formation:  {label:'Formation',      base:160, t0:10, age:1, max0:2, per:1.5, cap:12, desc:'Fighters and heavies 6% tougher per level'},
   ballistics: {label:'Ballistics',     base:160, t0:10, age:1, max0:2, per:1.5, cap:12, desc:'Ranged troops hit 6% harder per level'},
   mounts:     {label:'Mounts',         base:180, t0:10, age:2, max0:2, per:1.5, cap:10, desc:'Fast troops 6% quicker and tougher per level'},
-  engineering:{label:'Engineering',    base:220, t0:12, age:3, max0:2, per:1.5, cap:10, desc:'Siege hits fortresses 10% harder per level'},
+  engineering:{label:'Engineering',    base:220, t0:12, age:3, max0:2, per:1.5, cap:10, desc:'Siege hits fortresses 5% harder per level'},
   logistics:  {label:'Logistics',      base:250, t0:12, age:5, max0:1, per:1,   cap:4,  desc:'One more place in the training line per level'},
   watch:      {label:'Watchtowers',    base:220, t0:12, age:6, max0:2, per:1,   cap:6,  desc:'Wall defenders reach 6% farther per level'},
   shields:    {label:'Energy Shields', base:300, t0:14, age:9, max0:6, per:0,   cap:6,  desc:'Troops take 7% less damage per level'}
@@ -628,13 +660,14 @@ const SFX = {
   whistle: (t, d) => tone(d, 'sine', 2200, t, .8, .05, {to: 500}),
   rain:    (t, d) => { for (let k = 0; k < 10; k++) hiss(d, t + k*.05 + Math.random()*.04, .05, .12, 'bandpass', 2500 + Math.random()*2500, 3); },
   orbital: (t, d) => { tone(d, 'sawtooth', 90, t, 1.2, .15, {to: 900, lp: 3000}); tone(d, 'sine', 3000, t + .6, .5, .05, {to: 200}); },
+  heal:    (t, d) => { tone(d, 'sine', 880, t, .25, .05, {to: 1320}); tone(d, 'sine', 1320, t + .08, .2, .03, {to: 1760}); },
   win:     (t, d) => { leadNotes(d, t, [0,4,7,12,7,12], .14, 1.2); KIT.crash(d, t + .7, 1); hiss(d, t + .3, 2.2, .12, 'bandpass', 900, .8); hiss(d, t + .5, 2, .08, 'bandpass', 1600, .8); },
   horn:    (t, d) => { tone(d, 'sawtooth', 110, t, 1.4, .16, {lp: 700, lpTo: 1400, atk: .15, vib: 2}); tone(d, 'sawtooth', 165, t + .1, 1.3, .1, {lp: 700, atk: .15}); },
   crackle: (t, d) => { for (let k = 0; k < 4; k++) hiss(d, t + Math.random()*.3, .02, .08, 'bandpass', 2000 + Math.random()*3000, 4); },
   drums:   (t, d) => { tone(d, 'sine', 70, t, .4, .25, {to: 45}); tone(d, 'sine', 70, t + .45, .4, .18, {to: 45}); },
   lose:    (t, d) => leadNotes(d, t, [7,5,3,0], .24, 1.2)
 };
-const GAP = {crackle:.25, horn:1, drums:1.5, clash:.07, thud:.07, twang:.06, wall:.12, fall:.05, grunt:.1, coin:.08, boom:.1, launch:.1, shot:.05, zap:.06, whoosh:.08, cannon:.12, rocket:.12, wreck:.2, whistle:.2, rain:.3, click:.03};
+const GAP = {heal:.15, crackle:.25, horn:1, drums:1.5, clash:.07, thud:.07, twang:.06, wall:.12, fall:.05, grunt:.1, coin:.08, boom:.1, launch:.1, shot:.05, zap:.06, whoosh:.08, cannon:.12, rocket:.12, wreck:.2, whistle:.2, rain:.3, click:.03};
 function sfx(name, x){
   if (NET.role === 'host' && S && S.mode === 'battle' && !LOCAL_SFX.has(name) && NET.sounds.length < 60) NET.sounds.push([name, x == null ? null : Math.round(x)]);
   if (!A.ctx || !A.sfxLv || !S || S.mode === 'demo' || !SFX[name]) return;
@@ -819,6 +852,14 @@ function weapon(c, o, arm){
       break;
     case 'lance':
       hand(6,-18); line(c, -6,-16, atk ? 26 : 20, atk ? -18 : -27, WOOD, 1.5); if (o.age >= 3) poly(c, [-1,-14.6, 3,-18.6, 3,-14.4], STEEL, .4);
+      break;
+    case 'staff':
+      hand(4,-21); line(c, 4,-5, 6.5,-35, WOOD, 1.6); circ(c, 6.8,-36, 2.3, o.hi, .5);
+      if (atk) circ(c, 6.8,-36, 3.8, 'rgba(150,255,170,.5)', 0);
+      break;
+    case 'kit':
+      hand(4,-16); rrect(c, 1.5,-18.5, 7.5, 6, 1.2, o.col);
+      line(c, 5.25,-17.4, 5.25,-13.6, '#ffffff', 1.1); line(c, 3.3,-15.5, 7.2,-15.5, '#ffffff', 1.1);
       break;
     default: hand(3,-15);
   }
@@ -1188,7 +1229,7 @@ function newSeat(kind, n){
 function newGame(mode, lu, map, cols, cycle){
   L = 2000 + FORT*(lu[0].length + lu[1].length);
   applyColors(cols);
-  S = {v:7, mode, diff, lineup: lu, cols, map, cycle, t:0, nextId:1, over:-1, units:[], shots:[], fx:[], msgs:[], shake:0,
+  S = {v:8, mode, diff, lineup: lu, cols, map, cycle, t:0, nextId:1, over:-1, units:[], shots:[], fx:[], msgs:[], shake:0,
        sides: lu.map(seats => ({seats: seats.map(k => newSeat(k, seats.length))}))};
   cam.x = 0; cam.manual = 0;
 }
@@ -1208,7 +1249,8 @@ const can = sd => !!sd && sd.alive && live();
 const upCost = (sd, k, lvl) => round5(UPG[k].base * (1 + .35*lvl) * PRICE(sd.age));
 const qCap = sd => 5 + sd.up.logistics;
 const trainTime = (sd, it) => STATS[it.a][it.r].train / (1 + .06*sd.up.drill);
-const defCost = (sd, n) => round5(DEF_COST[n] * PRICE(sd.age));
+const defMax = sd => DEF_COST.length + sd.up.garrison;
+const defCost = (sd, n) => round5((DEF_COST[n] || DEF_COST[DEF_COST.length - 1]*Math.pow(1.3, n - DEF_COST.length + 1)) * PRICE(sd.age));
 const barrageCd = sd => 45 / (1 + .1*sd.up.barrage);
 const humanSide = s => NET.role === 'client' && NET.mySeat ? s === NET.mySeat[0] : S.sides[s].seats.some(sd => sd.kind === 'human' || sd.kind === 'remote');
 function xpMult(s, sd){ const D = DIFF[S.diff] || DIFF.normal; return (1 + .08*sd.up.scholars) * (S.mode === 'battle' && !humanSide(s) ? D.xp : 1); }
@@ -1232,7 +1274,7 @@ function cancelQueue(s, i){
 }
 function buyDefender(s, i){
   const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
-  if (sd.def >= DEF_COST.length || sd.gold < defCost(sd, sd.def)){ if (sd.kind === 'human') sfx('nope'); return false; }
+  if (sd.def >= defMax(sd) || sd.gold < defCost(sd, sd.def)){ if (sd.kind === 'human') sfx('nope'); return false; }
   sd.gold -= defCost(sd, sd.def); sd.def++; sfx('build', gateX(s, i));
   if (!isAI(sd)) say(`${tag(s)}${defenders(s, i)} defenders on the walls`, s, i);
   return true;
@@ -1249,13 +1291,29 @@ function finishResearch(s, sd){
   if (r.kind === 'walls') refreshMax(s);
   if (!isAI(sd)){ sfx('upgrade'); say(`${tag(s)}${UPG[r.kind].label} level ${sd.up[r.kind]}`, s, S.sides[s].seats.indexOf(sd)); }
 }
+function rankUp(s, i){
+  const sd = S.sides[s].seats[i], need = RANK_NEED(sd.rank || 0);
+  if (sd.xp < need){ if (sd.kind === 'human') sfx('nope'); return false; }
+  sd.xp -= need; sd.rank = (sd.rank || 0) + 1;
+  sfx('age'); say(`${seatName(s, i)} reaches Veteran Rank ${sd.rank}`, s, i);
+  return true;
+}
 function advanceAge(s, i){
   const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
+  if (sd.age >= AGES.length - 1) return rankUp(s, i);   // past the last age, experience buys veteran ranks
   if (sd.age >= AGES.length - 1 || sd.xp < XP_NEED(sd.age)){ if (sd.kind === 'human') sfx('nope'); return false; }
   sd.xp -= XP_NEED(sd.age); sd.age++; refreshMax(s);
   sfx('age'); say(`${seatName(s, i)} enters the ${AGES[sd.age].name}`, s, i);
   if (sd.age === AGES.length - 1) say(`${seatName(s, i)}'s fortress no longer repairs`, s, i);
   renderFort(s, i); if (S.mode === 'battle') buildTrays();
+  return true;
+}
+function emergencyRepair(s, i){
+  const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
+  if (sd.repaired || sd.hp >= sd.max){ if (sd.kind === 'human') sfx('nope'); return false; }
+  sd.repaired = true; sd.hp = Math.min(sd.max, sd.hp + sd.max*.35);
+  for (let k = 0; k < 6; k++) S.fx.push({k:'heal', x:gateX(s, i) - dirOf(s)*Math.random()*FORT, z:Math.random(), t:0, dur:1.1});
+  sfx('upgrade', gateX(s, i)); say(`${seatName(s, i)} rushes repairs to the fortress`, s, i);
   return true;
 }
 function leadFoe(s){
@@ -1281,11 +1339,11 @@ function barrage(s, i){
 function spawn(s, i, it){
   const st = STATS[it.a][it.r], sd = S.sides[s].seats[i], n = S.sides[s].seats.length;
   const U = sd.up, role = it.r;
-  const hpM = 1 + .06*U.armor + (role === 'inf' || role === 'heavy' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
+  const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
   const z = (i + Math.random())/n, hp = st.hp * hpM;
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
-    atk:.2, dm:1 + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0), spd:1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0),
-    rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .1*U.engineering, tk:1/(1 + .07*U.shields),
+    atk:.2, dm:1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0), spd:1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0),
+    rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
   sfx(d.f === 'm' ? d.m : d.f === 'v' ? (it.a >= 6 ? (d.v === 'hover' || d.v === 'mech' ? 'hum' : 'engine') : 'creak') : d.f === 's' ? (it.a >= 6 ? 'engine' : 'creak') : 'foot', front(s));
@@ -1313,7 +1371,7 @@ function hurtUnit(e, amt, src){
 function hurtBase(s, amt){
   if (S.over >= 0) return;
   const i = frontSeat(s), sd = S.sides[s].seats[i]; if (!sd.alive) return;
-  sd.hp = Math.max(0, sd.hp - amt); sd.shake = .2; sd.lastHit = S.t; sfx('wall', gateX(s, i));
+  sd.hp = Math.max(0, sd.hp - amt/(1 + .05*sd.up.gate)); sd.shake = .2; sd.lastHit = S.t; sfx('wall', gateX(s, i));
   const att = S.sides[1 - s]; att.seats.forEach(o => { if (o.alive) o.xp += amt * .05 * xpMult(1 - s, o) / Math.sqrt(att.seats.length); });
   if (sd.hp <= 0) fortFalls(s, i);
 }
@@ -1339,11 +1397,12 @@ function fire(side, kind, x0, z0, h0, dmg, arole, target, base, splash){
   sfx({rock:'whoosh', boulder:'launch', stone:'launch', arrow:'twang', javelin:'whoosh', bolt:'twang', bullet:'shot', ball:'cannon', shell:'cannon', rocket:'rocket', laser:'zap', plasma:'zap'}[kind], x0);
 }
 function findTarget(u){
-  const d = dirOf(u.side), rg = rangeOf(u); let best = null, bd = 1e9;
+  const d = dirOf(u.side), rg = rangeOf(u), mr = statOf(u).minRange || 0; let best = null, bd = 1e9;
   for (const e of S.units){
     if (e.side === u.side || e.dead) continue;
     if ((e.x - u.x)*d < -12) continue;
     const dist = Math.abs(e.x - u.x);
+    if (dist < mr) continue;   // siege engines cannot hit anything too close
     if (dist <= rg + statOf(e).r && dist < bd){ bd = dist; best = e; }
   }
   return best;
@@ -1353,19 +1412,20 @@ function findTarget(u){
 function aiThink(s, i){
   if (!S.sides[s].seats[i].alive) return;
   const side = S.sides[s], me = side.seats[i], D = DIFF[S.mode === 'demo' ? 'normal' : S.diff], age = me.age, foeS = 1 - s;
-  if (age < AGES.length - 1 && me.xp >= XP_NEED(age) && advanceAge(s, i)) return;
+  if (me.xp >= (age < AGES.length - 1 ? XP_NEED(age) : RANK_NEED(me.rank || 0)) && advanceAge(s, i)) return;
   const foes = [], mine = [];
   for (const u of S.units) if (!u.dead) (u.side === s ? mine : foes).push(u);
   const distF = u => Math.abs(u.x - front(s));
   const near = foes.filter(u => distF(u) < L*.4), close = foes.filter(u => distF(u) < 380);
   // the enemy is hiding behind walls: answer with long-range siege behind a front line
   const fsd = S.sides[foeS].seats[frontSeat(foeS)], turtle = defenders(foeS, frontSeat(foeS)) >= 4 || (fsd.up.walls > 0 && foes.length < 3);
+  if (!me.repaired && me.hp < me.max*.3 && close.length && emergencyRepair(s, i)) return;
   if (me.bar <= 0 && foes.length){
     const tgt = leadFoe(s), cluster = foes.filter(u => Math.abs(u.x - tgt.x) < BARRAGE_R).length;
     if ((cluster >= (D.smart >= 1 ? 3 : 4) || (distF(tgt) < 300 && cluster >= 2)) && barrage(s, i)) return;
   }
   const wantDef = close.length >= 2 ? D.def : (D.waves && S.t > 120 ? Math.min(2, D.def) : 0);
-  if (me.def < wantDef && me.def < DEF_COST.length){
+  if (me.def < wantDef && me.def < defMax(me)){
     if (me.gold >= defCost(me, me.def)){ buyDefender(s, i); return; }
     if (close.length >= 2 && me.q.length) return;
   }
@@ -1374,7 +1434,7 @@ function aiThink(s, i){
   if (!army && me.gold >= STATS[age].inf.cost){ queueUnit(s, i, 'inf'); return; }
   if (army >= 3 && me.res.length < (D.waves ? 2 : 1) && (!close.length || D.waves) && S.t > 5){
     const W = {trade:1.5, weapons:1.3, armor:1.3, shields:1.4, formation:1.1, scholars:1.1, ballistics:1, mounts:1, drill:1, medics:.9, logistics:.9,
-      range: turtle ? 2 : .8, engineering: turtle ? 2 : .7, march:.7, plunder:.6, towers:.7, barrage:.7, watch:.6, walls:.5};
+      range: turtle ? 2 : .8, engineering: turtle ? 2 : .7, march:.7, plunder:.6, towers:.7, barrage:.7, watch:.6, walls:.5, rapid:.6, pitch:.5, garrison:.4, gate:.6};
     let pickU = null, bs = 1e9, pl = 0;
     for (const k of UPG_KEYS){
       const lvl = me.up[k] + me.res.filter(r => r.kind === k).length;
@@ -1385,20 +1445,29 @@ function aiThink(s, i){
     if (me.hp < me.max*.6 && me.up.walls < maxLvl('walls', age) && !me.res.some(r => r.kind === 'walls') && me.gold >= upCost(me, 'walls', me.up.walls)) research(s, i, 'walls');
   }
   if (me.q.length >= (D.waves ? 4 : 2)) return;
-  const own = {inf:0, rng:0, fast:0, heavy:0, siege:0};
+  const own = Object.fromEntries(ROLES.map(r => [r, 0]));
   mine.forEach(u => own[u.role]++); side.seats.forEach(sd => sd.q.forEach(it => own[it.r]++));
+  const B = (x, y) => (BONUS[x] && BONUS[x][y]) || 1;
   let pick;
   if (Math.random() < D.smart){
-    const c = {inf:0, rng:0, fast:0, heavy:0, siege:0};
+    const c = Object.fromEntries(ROLES.map(r => [r, 0]));
     (near.length ? near : foes).forEach(u => c[u.role] += statOf(u).cost);
-    if (own.inf + own.heavy < 2) pick = me.gold >= STATS[age].heavy.cost*1.3 && Math.random() < .4 ? 'heavy' : 'inf';
-    else if (turtle && own.siege < (D.waves ? 4 : 2)) pick = 'siege';
-    else if (c.heavy + c.fast > 0 && c.heavy + c.fast >= c.rng + c.inf) pick = 'inf';
-    else if (c.rng + c.siege > 0 && c.rng + c.siege > c.inf) pick = 'fast';
-    else if (c.inf > 0) pick = Math.random() < .5 ? 'rng' : 'heavy';
-    else if (own.siege < 2 && Math.random() < .35) pick = 'siege';
-    else pick = ['inf','rng','fast','heavy','rng'][Math.floor(Math.random()*5)];
-  } else pick = ROLES[Math.floor(Math.random()*5)];
+    const fighters = ROLES.filter(r => r !== 'support' && r !== 'siege');
+    const total = Object.values(own).reduce((x, y) => x + y, 0);
+    if (own.inf + own.heavy + own.pike < 2) pick = me.gold >= STATS[age].heavy.cost*1.3 && Math.random() < .35 ? 'heavy' : 'inf';
+    else if (turtle && own.siege < (D.waves ? 3 : 2)) pick = 'siege';
+    else if (total >= 6 && own.support < Math.floor(total/6)) pick = 'support';
+    else if (!foes.length) pick = own.siege < 1 && Math.random() < .3 ? 'siege' : fighters[Math.floor(Math.random()*fighters.length)];
+    else {
+      // the troop whose matchups against what the enemy is fielding are best, with a little variety
+      let best = -1;
+      for (const r of fighters){
+        let v = 0; for (const e of ROLES) v += c[e] * B(r, e) / B(e, r);
+        v *= .85 + Math.random()*.3;
+        if (v > best){ best = v; pick = r; }
+      }
+    }
+  } else pick = ROLES[Math.floor(Math.random()*ROLES.length)];
   // waves: once an opening force is out, bank gold and release a group together,
   // either when the purse is full enough or after about 20 seconds, so pressure never stops
   if (D.waves && !near.length && army >= 3){
@@ -1408,7 +1477,8 @@ function aiThink(s, i){
     me.bank = 1;
   }
   if (me.gold >= STATS[age][pick].cost && queueUnit(s, i, pick)) return;
-  if (near.length && !me.q.length && me.gold >= STATS[age].inf.cost){ queueUnit(s, i, 'inf'); return; }
+  // can't afford the troop it wants: save up for it, unless the walls are under attack and almost nobody is defending
+  if (close.length && !me.q.length && army < 2 && me.gold >= STATS[age].inf.cost){ queueUnit(s, i, 'inf'); return; }
   if (me.gold < STATS[age].inf.cost) me.bank = 0;
 }
 
@@ -1418,7 +1488,7 @@ function update(dt){
   const D = DIFF[S.diff] || DIFF.normal;
   if (S.shake > 0) S.shake -= dt;
   const maxAge = Math.max(sideAge(0), sideAge(1));
-  if (S.t > 18*60){   // overtime: supplies run low and every front fortress crumbles, so no battle lasts forever
+  if (S.t > 25*60){   // overtime: supplies run low and every front fortress crumbles, so no battle lasts forever
     if (!S.overtime){ S.overtime = true; say('Overtime: supplies are running low and the front fortresses are crumbling'); }
     for (let s = 0; s < 2 && S.over < 0; s++){ const i = frontSeat(s), sd = S.sides[s].seats[i]; if (sd.alive){ sd.hp -= sd.max*.003*dt; if (sd.hp <= 0) fortFalls(s, i); } }
   }
@@ -1438,14 +1508,23 @@ function update(dt){
       if (sd.age < AGES.length - 1 && sd.hp < sd.max && S.t - sd.lastHit > 6 && !S.units.some(u => u.side !== s && Math.abs(u.x - gate) < 700))
         sd.hp = Math.min(sd.max, sd.hp + sd.max*.004*dt);
       if (sd.hp < sd.max*.33 && Math.random() < dt*2) sfx('crackle', gate);
+      if (sd.up.pitch){   // boiling oil on anyone hammering at the gate
+        sd.pitchT = (sd.pitchT || 1) - dt;
+        if (sd.pitchT <= 0){
+          sd.pitchT = 1;
+          let hit = false;
+          for (const e of S.units) if (e.side !== s && !e.dead && Math.abs(e.x - gate) < 90){ hurtUnit(e, 6*POW(sd.age)*sd.up.pitch, 'def'); hit = true; }
+          if (hit){ S.fx.push({k:'smoke', x:gate + dirOf(s)*30, z:.5, h:.25, t:0, dur:1.2, seed:Math.random()}); sfx('crackle', gate); }
+        }
+      }
       sd.defT -= dt;
       if (sd.defT <= 0){
         let best = null, bd = DEF_RANGE*(1 + .06*sd.up.watch);
         for (const e of S.units){ if (e.side === s || e.dead) continue; const d = Math.abs(e.x - gate); if (d < bd){ bd = d; best = e; } }
         const n = defenders(s, i);
         if (best){
-          sd.defT = 1.4 / n; sd.defK = (sd.defK + 1) % n;
-          fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
+          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % n;
+          fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK % 7), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
         } else sd.defT = .2;
       }
     });
@@ -1457,25 +1536,38 @@ function update(dt){
     if (u.lunge > 0) u.lunge -= dt;
     if (u.heal && u.hp < u.max) u.hp = Math.min(u.max, u.hp + u.max*u.heal*dt);
     u.atk -= dt;
+    if (st.healer){   // healers patch up the most hurt ally nearby and stay behind the front line
+      if (u.atk <= 0){
+        let best = null, bf = 1;
+        for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 150){ const fr = f.hp/f.max; if (fr < bf){ bf = fr; best = f; } }
+        if (best){ u.atk = st.rate; u.lunge = .25; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
+      }
+      const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 170);
+      let lead = null; for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && (!lead || (f.x - lead.x)*d > 0)) lead = f;
+      const hold = threat || (lead ? (u.x - lead.x)*d > -50 : Math.abs(u.x - front(u.side)) > 120);
+      if (!hold){ u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
+      continue;
+    }
     const tgt = findTarget(u);
     const atBase = !tgt && Math.abs(u.x - front(foe)) <= rg + st.r + 2;
     if (tgt || atBase){
       if (u.atk <= 0){
         u.atk = st.rate; u.lunge = .2;
-        if (st.proj){ fire(u.side, st.proj, u.x, u.z, u.role === 'siege' ? .08 : .1, dmgOf(u), u.role, tgt, foe, st.splash || 0); S.shots[S.shots.length - 1].fm = u.fm || 1; }
+        if (st.proj){ fire(u.side, st.proj, u.x, u.z, u.role === 'siege' ? .08 : .1, dmgOf(u), u.role, tgt, foe, st.splash || 0); const sh = S.shots[S.shots.length - 1]; sh.fm = u.fm || 1; sh.dm = u.dm || 1; }
         else {
           if (tgt){
             hurtUnit(tgt, dmgVs(dmgOf(u), u.role, tgt.role), 'unit');
             if (st.trample) for (const e of S.units) if (e !== tgt && e.side !== u.side && !e.dead && Math.abs(e.x - tgt.x) < st.trample) hurtUnit(e, dmgVs(dmgOf(u), u.role, e.role)*.5, 'unit');
-          } else hurtBase(foe, dmgOf(u));
-          const gun = u.age >= 7 && st.d.f === 'p';
+          } else hurtBase(foe, dmgOf(u)*.35);   // swords and spears barely dent stone; siege is the wall-breaker
+          const gun = (u.age >= 7 || (u.role === 'pike' && u.age >= 5)) && st.d.f === 'p';
           sfx(gun ? 'shot' : u.age === 0 ? 'thud' : 'clash', u.x);
           if (gun) S.fx.push({k:'flash', x:u.x + d*16, z:u.z, h:.09, t:0, dur:.07});
           else S.fx.push({k:'spark', x: tgt ? (u.x + tgt.x)/2 : front(foe), z:u.z, t:0, dur:.18, seed:Math.random()});
         }
       }
     } else {
-      u.x += d * st.speed * (u.spd || 1) * dt; u.step += dt * st.speed / 7;
+      const blind = st.minRange && S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < st.minRange + 20);   // siege waits for its escort
+      if (!blind){ u.x += d * st.speed * (u.spd || 1) * dt; u.step += dt * st.speed / 7; }
       u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r);
       if (OPT.gfx !== 'low' && (u.role === 'fast' || u.role === 'heavy' || st.d.f === 'v') && Math.random() < dt*5) S.fx.push({k:'dust', x:u.x - d*st.r, z:u.z, t:0, dur:.8, seed:Math.random()});
     }
@@ -1487,13 +1579,13 @@ function update(dt){
       sh.done = true;
       if (sh.splash){
         for (const e of S.units) if (e.side !== sh.side && !e.dead && Math.abs(e.x - sh.tx) <= sh.splash + statOf(e).r) hurtUnit(e, dmgVs(sh.dmg, 'siege', e.role), 'unit');
-        if (sh.base >= 0) hurtBase(sh.base, sh.dmg * (sh.fm || 1) * (S.sides[sh.base].seats[frontSeat(sh.base)].age === AGES.length - 1 ? 3.5 : ROLE.siege.siege));
+        if (sh.base >= 0) hurtBase(sh.base, sh.dmg / (sh.dm || 1) * (sh.fm || 1) * ROLE.siege.siege);
         const big = ['shell','rocket','plasma','ball'].includes(sh.kind);
         S.fx.push({k:'boom', x:sh.tx, z:sh.tz, t:0, dur:.55, big, seed:Math.random()}); sfx('boom', sh.tx);
         const sx = X(sh.tx); if (sx > -60 && sx < cw + 60) S.shake = Math.max(S.shake, big ? .22 : .1);
       } else if (!sh.miss){
         if (sh.uid){ const tg = S.units.find(e => e.id === sh.uid); if (tg) hurtUnit(tg, dmgVs(sh.dmg, sh.arole, tg.role), sh.arole === 'def' ? 'def' : 'unit'); }
-        else if (sh.base >= 0) hurtBase(sh.base, sh.dmg);
+        else if (sh.base >= 0) hurtBase(sh.base, sh.dmg*.35)
         if (sh.kind === 'rocket') S.fx.push({k:'boom', x:sh.tx, z:sh.tz, t:0, dur:.35, seed:Math.random()});
       }
     }
@@ -1531,7 +1623,7 @@ const FORT_ROOF = {cave:.6, palace:.64, castle:.6, star:.56, bunker:.56, citadel
 const fortH = () => fh*.7;
 // height of a wall defender's hands above the lane, so their shots leave from the soldier and not the wall
 function fortRoofH(s, i){ return (laneY(.5) - (FORT_BASE() - fortH()*FORT_ROOF[AGES[S.sides[s].seats[i].age].fort]))/fh + 20*scaleK(.4)*.85/fh; }
-const defX = (s, i, k) => s === 0 ? FORT*(i + .18 + .12*k) : L - FORT*(i + .18 + .12*k);
+const defX = (s, i, k) => s === 0 ? FORT*(i + .16 + .1*k) : L - FORT*(i + .16 + .1*k);
 function layout(){
   const r = cv.getBoundingClientRect(); dpr = Math.min(OPT.gfx === 'low' ? 1 : 2, window.devicePixelRatio || 1);
   cw = Math.max(1, r.width); ch = Math.max(1, r.height);
@@ -2023,16 +2115,16 @@ function drawFort(s, i){
   }
   const team = PAL[s][i], several = side.seats.length > 1;
   if (sd.alive){
-    const n = defenders(s, i), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
+    const n = Math.min(7, defenders(s, i)), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
     for (let a = 0; a < n; a++){
       ctx.save(); ctx.translate(X(defX(s, i, a)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
-      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK === a && sd.defT > .9/n, ph:0}, false);
+      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK % 7 === a && sd.defT > .5/defenders(s, i), ph:0}, false);
       ctx.restore();
     }
   }
   // health, kept inside the screen and above the command trays
   const fsz = Math.max(12, Math.min(22, fh*.058) * (several ? .78 : 1));
-  const txt = sd.alive ? (several ? `${team.name}: ${Math.ceil(sd.hp)}` : `Health: ${Math.ceil(sd.hp)}`) : `${several ? team.name + ' ' : ''}fallen`;
+  const txt = sd.alive ? (several ? `${Math.ceil(sd.hp)}` : `Health: ${Math.ceil(sd.hp)}`) : 'fallen';   // names are in the corner display
   ctx.font = `700 ${fsz}px Cinzel, "Times New Roman", serif`;
   const tw = ctx.measureText(txt).width, ty = Math.min(FORT_BASE() + fsz*1.1, fh - 6);
   let tx = (s === 0 ? x + f.w*.6 : x + f.w*.4) - tw/2;
@@ -2142,6 +2234,10 @@ function drawFx(f){
       ctx.font = `700 ${Math.max(12, fh*.05)}px "Barlow Condensed", sans-serif`; ctx.textAlign = 'center';
       const y = laneY(f.z) - fh*.24 - p*fh*.08;
       ctx.strokeText(f.txt, x, y); ctx.fillText(f.txt, x, y); ctx.globalAlpha = 1; break; }
+    case 'heal': {
+      const y = laneY(f.z) - fh*.12 - p*fh*.1, s2 = fh*.018;
+      ctx.globalAlpha = 1 - p; ctx.fillStyle = '#7dff9a';
+      ctx.fillRect(x - s2*.25, y - s2, s2*.5, s2*2); ctx.fillRect(x - s2, y - s2*.25, s2*2, s2*.5); ctx.globalAlpha = 1; break; }
     case 'barrage': drawBarrage(f); break;
   }
 }
@@ -2171,27 +2267,45 @@ function draw(){
   ctx.restore();
   if (S && S.mode !== 'demo') drawHUD();
 }
+// who commands each fortress, as shown beside their health bar
+function seatLabel(s, i){
+  const sd = S.sides[s].seats[i];
+  if (NET.role === 'client' && NET.mySeat && NET.mySeat[0] === s && NET.mySeat[1] === i) return 'You';
+  if (sd.kind === 'cpu') return 'CPU';
+  if (sd.kind === 'remote'){ const id = NET.owners[`${s}-${i}`]; return (id && NET.names[id]) || 'Online player'; }
+  const locals = [];
+  S.sides.forEach((side, ss) => side.seats.forEach((x, ii) => { if (x.kind === 'human') locals.push(`${ss}-${ii}`); }));
+  if (NET.role !== 'client' && locals.length === 1) return 'You';
+  return `Player ${locals.indexOf(`${s}-${i}`) + 1}`;
+}
 function drawHUD(){
-  const fsz = Math.max(12, Math.min(18, fh*.06));
+  const fsz = Math.max(12, Math.min(18, fh*.06)), small = Math.max(10, Math.round(fsz*.72));
   for (let s = 0; s < 2; s++){
-    const side = S.sides[s], left = s === 0, x = left ? 10 : cw - 10, w = Math.min(cw*.22, 170);
+    const side = S.sides[s], left = s === 0, x = left ? 10 : cw - 10, w = Math.min(cw*.2, 160), n = side.seats.length;
     ctx.textAlign = left ? 'left' : 'right';
     ctx.font = `700 ${fsz}px Cinzel, serif`; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.fillStyle = '#fff6e0';
-    const t = side.seats.length > 1 ? SIDE_NAME[s] : `${SIDE_NAME[s]} · ${AGES[side.seats[0].age].name}`;
-    ctx.strokeText(t, x, 8 + fsz); ctx.fillText(t, x, 8 + fsz);
-    const bx = left ? x : x - w, rowH = side.seats.length > 1 ? 11 : 12;
-    let by = 14 + fsz;
+    const title = n > 1 ? `${SIDE_NAME[s]} side` : `${SIDE_NAME[s]} · ${AGES[side.seats[0].age].name}`;
+    ctx.strokeText(title, x, 6 + fsz); ctx.fillText(title, x, 6 + fsz);
+    const bx = left ? x + 18 : x - 18 - w;
+    let by = 6 + fsz + 9;
     side.seats.forEach((sd, i) => {
-      const p = sd.alive ? sd.hp/sd.max : 0, num = !sd.alive ? 'fallen' : side.seats.length > 1 ? `${Math.ceil(sd.hp)} · ${AGES[sd.age].name}` : `${Math.ceil(sd.hp)}`;
-      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(bx, by, w, 8);
-      ctx.fillStyle = !sd.alive ? '#555' : p > .35 ? '#35b54e' : '#d63a2a'; ctx.fillRect(left ? bx : bx + w*(1 - p), by, w*p, 8);
-      if (sd.alive && sd.age < AGES.length - 1){ const q = Math.min(1, sd.xp/XP_NEED(sd.age)); ctx.fillStyle = '#f2c14e'; ctx.fillRect(left ? bx : bx + w*(1 - q), by + 8, w*q, 2); }
-      if (side.seats.length > 1){ ctx.fillStyle = PAL[s][i].base; ctx.fillRect(left ? bx - 6 : bx + w + 2, by, 4, 8); }
-      ctx.font = `700 ${Math.max(10, fsz*.7)}px "Barlow Condensed", sans-serif`; ctx.fillStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.55)';
-      ctx.strokeText(num, left ? bx + 4 : bx + w - 4, by + 8); ctx.fillText(num, left ? bx + 4 : bx + w - 4, by + 8);
-      by += rowH;
+      const col = PAL[s][i], p = sd.alive ? sd.hp/sd.max : 0;
+      const sx = left ? x : x - 12;
+      ctx.fillStyle = col.base; ctx.fillRect(sx, by + 1, 12, 12);
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.strokeRect(sx + .5, by + 1.5, 11, 11);
+      ctx.font = `700 ${small}px "Barlow Condensed", sans-serif`; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.65)';
+      const name = seatLabel(s, i) + (n > 1 ? ' · ' + AGES[sd.age].name : '') + (sd.rank ? ' · Rank ' + sd.rank : '');
+      const hp = sd.alive ? `${Math.ceil(sd.hp)}` : 'fallen';
+      ctx.textAlign = left ? 'left' : 'right'; ctx.fillStyle = col.hi;
+      ctx.strokeText(name, left ? bx : bx + w, by + small); ctx.fillText(name, left ? bx : bx + w, by + small);
+      ctx.textAlign = left ? 'right' : 'left'; ctx.fillStyle = sd.alive ? '#ffffff' : '#9a9a9a';
+      ctx.strokeText(hp, left ? bx + w : bx, by + small); ctx.fillText(hp, left ? bx + w : bx, by + small);
+      const barY = by + small + 3;
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(bx, barY, w, 7);
+      ctx.fillStyle = !sd.alive ? '#555' : p > .35 ? '#35b54e' : '#d63a2a'; ctx.fillRect(left ? bx : bx + w*(1 - p), barY, w*p, 7);
+      if (sd.alive){ const q = Math.min(1, sd.xp/(sd.age < AGES.length - 1 ? XP_NEED(sd.age) : RANK_NEED(sd.rank || 0))); ctx.fillStyle = '#f2c14e'; ctx.fillRect(left ? bx : bx + w*(1 - q), barY + 7, w*q, 2); }
+      by = barY + 16;
     });
-    by -= 10;
   }
   let y = fh*.3;
   for (const m of S.msgs){
@@ -2227,6 +2341,11 @@ Object.assign(SVGI, {
   plunder:'<path d="M9 4h6l-2 3c4 2 6 5 6 9a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4c0-4 2-7 6-9z"/><path d="M10 13h4"/>',
   scholars:'<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v14"/>',
   towers:'<path d="M6 21V9h12v12M6 9V4h3v2h2V4h2v2h2V4h3v5"/><path d="M10 21v-5h4v5"/>',
+  rapid:'<path d="M3 12h11M10 8l4 4-4 4M9 12h11M16 8l4 4-4 4"/>',
+  pitch:'<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/><path d="M12 11c1.5 2 2.5 3 2.5 4.5a2.5 2.5 0 0 1-5 0c0-1.5 1-2.5 2.5-4.5z"/>',
+  garrison:'<circle cx="9" cy="7" r="3"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6M18 8v6M15 11h6"/>',
+  gate:'<path d="M4 21V8a8 8 0 0 1 16 0v13"/><path d="M4 21h16M8 10v11M12 6v15M16 10v11M4 14h16"/>',
+  repair:'<path d="M14.5 5.5a4 4 0 0 0 4.9 4.9l-9.5 9.5a2.1 2.1 0 0 1-3-3l9.5-9.5a4 4 0 0 0-1.9-1.9z"/>',
   formation:'<path d="M3 6h5v10l-2.5 3L3 16zM9.5 6h5v10L12 19l-2.5-3zM16 6h5v10l-2.5 3L16 16z"/>',
   ballistics:'<path d="M4 20L20 4M14 4h6v6M4 20l1-4M4 20l4-1"/>',
   mounts:'<path d="M7 20v-9a5 5 0 0 1 10 0v9"/><path d="M5 20h4M15 20h4"/>',
@@ -2281,8 +2400,8 @@ function seatHTML(s, i){
     <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}">${svgi(k)}<b>${UPG[k].label}</b><span>${UPG[k].desc}</span><span class="lv"></span><small></small></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
-    <div class="units">${ROLES.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
-    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('age','Advance to the next age',svgi('age'))}</div>
+    <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
+    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('repair','Emergency repair, once per battle',svgi('repair'))}${a('age','Advance to the next age',svgi('age'))}</div>
   </div>`;
 }
 function buildTrays(){
@@ -2299,7 +2418,7 @@ function buildTrays(){
       const el = tray.children[k], q = sel => el.querySelector(sel);
       UI[s][i] = {gold:q('[data-k=gold]'), inc:q('[data-k=inc]'), qtxt:q('[data-k=qtxt]'), qbar:q('[data-k=qbar]'),
         units:Object.fromEntries(ROLES.map(r => [r, q(`[data-r=${r}]`)])),
-        acts:Object.fromEntries(['cancel','def','barrage','up','age'].map(a => [a, q(`[data-a=${a}]`)])),
+        acts:Object.fromEntries(['cancel','def','barrage','up','repair','age'].map(a => [a, q(`[data-a=${a}]`)])),
         panel:q('.upPanel'), upq:q('.upQ'), cards:Object.fromEntries(UPG_KEYS.map(k => [k, q(`[data-up=${k}]`)]))};
     });
   }
@@ -2330,16 +2449,17 @@ function syncUI(){
     const full = sd.q.length >= qCap(sd);
     for (const r of ROLES){ const b = ui.units[r]; setOff(b, full || sd.gold < STATS[age][r].cost); badge(b, sd.q.filter(x => x.r === r).length); }
     setOff(ui.acts.cancel, !sd.q.length);
-    const db = ui.acts.def, dmax = sd.def >= DEF_COST.length;
+    const db = ui.acts.def, dmax = sd.def >= defMax(sd);
     setTxt(db.querySelector('small'), dmax ? 'Max' : defCost(sd, sd.def)); setOff(db, dmax || sd.gold < defCost(sd, sd.def)); badge(db, defenders(s, i));
     const bb = ui.acts.barrage, cd = barrageCd(sd), ready = sd.bar <= 0;
     setTxt(bb.querySelector('small'), ready ? 'Ready' : Math.ceil(sd.bar) + 's'); setOff(bb, !ready);
     const inRange = !!barrageTarget(s); setOff(bb, !ready || !inRange); bb.classList.toggle('glow', ready && inRange); setVar(bb.querySelector('.prog'), 1 - Math.max(0, sd.bar)/cd);
     const ub = ui.acts.up, levels = UPG_KEYS.reduce((n, k) => n + sd.up[k], 0);
     setTxt(ub.querySelector('small'), sd.res.length ? `${sd.res.length} in line` : 'Open'); setVar(ub.querySelector('.prog'), sd.res.length ? sd.res[0].t/sd.res[0].dur : 0); badge(ub, levels);
-    const ab = ui.acts.age, last = age >= AGES.length - 1, need = last ? 1 : XP_NEED(age), aReady = !last && sd.xp >= need;
-    setTxt(ab.querySelector('small'), last ? 'Max' : aReady ? 'Ready' : `${Math.floor(sd.xp)}/${need}`);
-    setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), last ? 1 : sd.xp/need); badge(ab, age + 1);
+    const rb = ui.acts.repair; setTxt(rb.querySelector('small'), sd.repaired ? 'Used' : 'Once'); setOff(rb, !!sd.repaired || sd.hp >= sd.max);
+    const ab = ui.acts.age, last = age >= AGES.length - 1, need = last ? RANK_NEED(sd.rank || 0) : XP_NEED(age), aReady = sd.xp >= need;
+    setTxt(ab.querySelector('small'), aReady ? (last ? 'Rank up' : 'Ready') : `${Math.floor(sd.xp)}/${need}`);
+    setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
     if (!ui.panel.hidden){
       setTxt(ui.upq, sd.res.length ? 'In line: ' + sd.res.map(r => UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.');
       for (const k of UPG_KEYS){
@@ -2361,6 +2481,7 @@ function act(s, i, role, a){
   else if (a === 'def') buyDefender(s, i);
   else if (a === 'barrage') barrage(s, i);
   else if (a === 'up') togglePanel(s, i);
+  else if (a === 'repair') emergencyRepair(s, i);
   else if (a === 'age') advanceAge(s, i);
 }
 function press(e){
@@ -2378,8 +2499,8 @@ document.addEventListener('keydown', e => {
   if (!S || S.mode === 'demo' || S.over >= 0) return;
   if (e.key === 'Escape' || e.key === 'p'){ togglePause(!paused); return; }
   const seat = S.sides[0].seats.findIndex(sd => sd.kind === 'human' && sd.alive); if (seat < 0) return;
-  const k = e.key.toLowerCase(), n = '12345'.indexOf(k), a = {q:'def', w:'barrage', e:'up', a:'age', x:'cancel'}[k];
-  if (n >= 0) act(0, seat, ROLES[n]); else if (a) act(0, seat, null, a);
+  const k = e.key.toLowerCase(), n = '1234567'.indexOf(k), a = {q:'def', w:'barrage', e:'up', a:'age', x:'cancel', r:'repair'}[k];
+  if (n >= 0) act(0, seat, ROLE_UI[n]); else if (a) act(0, seat, null, a);
   else if (e.key === 'ArrowLeft'){ cam.x -= span*.25; cam.manual = 4; clampCam(); }
   else if (e.key === 'ArrowRight'){ cam.x += span*.25; cam.manual = 4; clampCam(); }
 });
@@ -2448,17 +2569,20 @@ document.addEventListener('visibilitychange', () => {
 function buildGuide(){
   const c = PAL[0][0];
   $('#guide').innerHTML = [
-    ['inf', 'Fighter', 'Cheap. Strong against fast and heavy troops.'],
-    ['rng', 'Ranged', 'Attacks from a distance. Strong against fighters.'],
-    ['fast', 'Fast', 'Quick. Strong against ranged and siege.'],
-    ['heavy', 'Heavy', 'Very tough. Tramples groups.'],
-    ['siege', 'Siege', 'Outranges wall defenders, hits groups, double damage to forts.'],
+    ['inf', 'Fighter', 'All-round. Beats siege engines and healers; loses to heavies.'],
+    ['pike', 'Pike', 'Stops riders and heavies cold; loses to ranged troops.'],
+    ['rng', 'Ranged', 'Attacks from a distance. Beats fighters and pikes; loses to riders.'],
+    ['fast', 'Fast', 'Quick raiders. Beat ranged troops, siege and healers; lose to pikes.'],
+    ['heavy', 'Heavy', 'Very tough. Tramples fighters; loses to pikes.'],
+    ['siege', 'Siege', 'Long range and wrecks forts, but cannot hit anything close. Guard it.'],
+    ['support', 'Healer', 'Heals the most hurt troops nearby and stays behind the front line.'],
     ['@barrage', 'Barrage', 'Free bombardment that recharges. Rocks in the Stone Age, orbital strikes in the Future.'],
-    ['@star', 'Upgrades', 'Nineteen upgrades. Every age raises their level caps, and new ones unlock along the way.'],
-    ['@age', 'Advance age', 'Fill the experience bar, then enter the next age.'],
+    ['@star', 'Upgrades', 'Twenty-three upgrades. Every age raises their level caps, and new ones unlock along the way.'],
+    ['@age', 'Advance age', 'Fill the experience bar, then enter the next age. After the Future, experience buys Veteran Ranks: each makes new troops 4% stronger.'],
+    ['@repair', 'Emergency repair', 'Restores 35% of your fortress, once per battle.'],
     ['@towers', 'Fortresses', 'Every commander has one. The front fortress is attacked first; a side loses when its last one falls.']
   ].map(([g, n, t]) => `${g[0] === '@' ? svgi(g.slice(1)) : `<img src="${unitIcon(1, g, c)}" alt="" style="width:28px;height:28px">`}<div><b>${n}</b> <span>${t}</span></div>`).join('');
-  $('#agesList').innerHTML = AGES.map((ag, a) => `<div class="age"><b>${a + 1}. ${ag.name}</b><div class="row">${ROLES.map(r => `<img src="${unitIcon(a, r, c)}" alt="${STATS[a][r].name}" title="${STATS[a][r].name}">`).join('')}</div></div>`).join('');
+  $('#agesList').innerHTML = AGES.map((ag, a) => `<div class="age"><b>${a + 1}. ${ag.name}</b><div class="row">${ROLE_UI.map(r => `<img src="${unitIcon(a, r, c)}" alt="${STATS[a][r].name}" title="${STATS[a][r].name}">`).join('')}</div></div>`).join('');
 }
 
 /* =================== online play: one phone hosts the battle, the others join with a room code =================== */
@@ -2556,6 +2680,7 @@ function onHostData(conn, m){
   else if (m.a === 'cancel') cancelQueue(s, i);
   else if (m.a === 'def') buyDefender(s, i);
   else if (m.a === 'barrage') barrage(s, i);
+  else if (m.a === 'repair') emergencyRepair(s, i);
   else if (m.a === 'age') advanceAge(s, i);
 }
 function netLobby(){
@@ -2574,7 +2699,7 @@ function hostSnap(){
   const fresh = list => { const out = []; for (const o of list) if (!o._sent){ o._sent = 1; const c = {...o}; delete c._sent; out.push(c); } return out; };
   sendAll({t:'snap', st:S.t, ot:!!S.overtime, over:S.over, shake:S.shake,
     sides:S.sides.map(side => side.seats.map(sd => ({kind:sd.kind, gold:sd.gold, q:sd.q, qt:sd.qt, def:sd.def, up:sd.up, res:sd.res, bar:sd.bar,
-      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, age:sd.age, xp:sd.xp}))),
+      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, age:sd.age, xp:sd.xp, rank:sd.rank || 0, repaired:!!sd.repaired}))),
     units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0]),
     shots:fresh(S.shots), fx:fresh(S.fx), msgs:fresh(S.msgs), snd:NET.sounds.splice(0)});
 }
@@ -2699,7 +2824,7 @@ function frame(now){
 }
 function boot(data){
   applyColors(colors); renderLineup(); setToggles();
-  if (data && data.S && data.S.v === 7 && data.S.mode === 'battle' && data.S.over < 0){
+  if (data && data.S && data.S.v === 8 && data.S.mode === 'battle' && data.S.over < 0){
     applyColors(data.S.cols); L = 2000 + FORT*(data.S.lineup[0].length + data.S.lineup[1].length);
     S = data.S; buildTrays(); layout(); document.body.classList.add('battle');
     $('#menu').hidden = true; paused = true; $('#pauseOv').hidden = false; A.mode = 'quiet';
