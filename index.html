@@ -232,7 +232,7 @@ details[open].card summary::after{content:" −"}
           <p class="note" id="lineupNote"></p>
           <div id="diffBox" class="lineup">
             <div class="label">Computer skill</div>
-            <div class="seg seg4" id="diffSeg"><button class="chip" data-d="easy">Easy</button><button class="chip" data-d="normal">Normal</button><button class="chip" data-d="hard">Hard</button><button class="chip" data-d="brutal">Brutal</button></div>
+            <div class="seg" id="diffSeg"><button class="chip" data-d="easy">Easy</button><button class="chip" data-d="normal">Normal</button><button class="chip" data-d="hard">Hard</button><button class="chip" data-d="brutal">Brutal</button><button class="chip" data-d="nightmare">Nightmare</button><button class="chip" data-d="insane">Insane</button></div>
           </div>
           <div class="lineup">
             <div class="label">Battlefield</div>
@@ -330,7 +330,7 @@ const ROLE = {
   heavy:{cost:250, hp:620, dmg:38, rate:1.4, range:38,  speed:38, train:6,   r:34, trample:50},
   siege:{cost:220, hp:120, dmg:50, rate:3.6, range:400, speed:28, train:6.5, r:28, splash:50, siege:2.2, minRange:140},
   pike: {cost:55,  hp:120, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
-  support:{cost:65, hp:70, dmg:0,  rate:1.1, range:0,   speed:46, train:2.2, r:14, healer:18}
+  support:{cost:65, hp:95, dmg:0,  rate:.6,  range:0,   speed:46, train:2.2, r:14, healer:36}
 };
 // who beats whom: pikes stop riders and heavies, ranged troops shoot down pikes and fighters, riders run down
 // ranged troops, siege and healers, heavies trample fighters, and fighters overrun siege engines
@@ -423,7 +423,9 @@ const DIFF = {
   easy:  {mult:.8,   think:1.3, smart:.4,  def:1, waves:false, xp:1},
   normal:{mult:1,    think:.75, smart:.75, def:2, waves:false, xp:1},
   hard:  {mult:1.2,  think:.35, smart:1,   def:3, waves:true,  xp:1.1},
-  brutal:{mult:1.45, think:.2,  smart:1,   def:4, waves:true,  xp:1.25}
+  brutal:{mult:1.45, think:.2,  smart:1,   def:4, waves:true,  xp:1.25},
+  nightmare:{mult:1.8, think:.15, smart:1,  def:4, waves:true,  xp:1.45, start:1.5, waveGap:16},
+  insane:{mult:2.5,  think:.1,  smart:1,   def:4, waves:true,  xp:1.8,  start:2.5, waveGap:13}
 };
 const COLORS = [
   {name:'Blue',   base:'#2f6fd6', hi:'#a9c6ff'}, {name:'Red',    base:'#c8402c', hi:'#ffb9a6'},
@@ -1254,6 +1256,8 @@ function newGame(mode, lu, map, cols, cycle){
   S = {v:8, mode, diff, lineup: lu, cols, map, cycle, t:0, nextId:1, over:-1, units:[], shots:[], fx:[], msgs:[], shake:0,
        sides: lu.map(seats => ({seats: seats.map(k => newSeat(k, seats.length))}))};
   cam.x = 0; cam.manual = 0;
+  const start = mode === 'battle' && DIFF[diff] && DIFF[diff].start;   // the toughest computers begin with a head start
+  if (start) S.sides.forEach(side => side.seats.forEach(sd => { if (sd.kind === 'cpu') sd.gold = Math.round(sd.gold*start); }));
 }
 // each commander has a fortress; they stand in a row, the first commander's at the back
 const gateX = (s, pos) => s === 0 ? (pos + 1)*FORT : L - (pos + 1)*FORT;
@@ -1493,9 +1497,10 @@ function aiThink(s, i){
   // waves: once an opening force is out, bank gold and release a group together,
   // either when the purse is full enough or after about 20 seconds, so pressure never stops
   if (D.waves && !near.length && army >= 3){
-    const due = S.t - (me.lastWave || 0) > 20 + Math.random()*5;
+    // computers on the same side release their waves together
+    const due = S.t - Math.max(me.lastWave || 0, side.lastWave || 0) > (D.waveGap || 20) + Math.random()*5;
     if (!me.bank && me.gold < STATS[age].heavy.cost*1.3 && !due) return;
-    if (!me.bank) me.lastWave = S.t;
+    if (!me.bank){ me.lastWave = S.t; side.lastWave = S.t; side.seats.forEach(o => { if (o !== me && o.kind === 'cpu') o.bank = 1; }); }
     me.bank = 1;
   }
   if (me.gold >= STATS[age][pick].cost && queueUnit(s, i, pick)) return;
@@ -1561,12 +1566,13 @@ function update(dt){
     if (st.healer){   // healers patch up the most hurt ally nearby and stay behind the front line
       if (u.atk <= 0){
         let best = null, bf = 1;
-        for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 150){ const fr = f.hp/f.max; if (fr < bf){ bf = fr; best = f; } }
-        if (best){ u.atk = st.rate; u.lunge = .25; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
+        // heal reach is short, and each troop takes healing at most every 0.6 seconds, so piling healers behind one tank stops paying off
+        for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 70 && S.t - (f.healedAt || -9) >= .6){ const fr = f.hp/f.max; if (fr < bf){ bf = fr; best = f; } }
+        if (best){ u.atk = st.rate; u.lunge = .25; best.healedAt = S.t; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
       }
-      const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 170);
+      const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 40);
       let lead = null; for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && (!lead || (f.x - lead.x)*d > 0)) lead = f;
-      const hold = threat || (lead ? (u.x - lead.x)*d > -50 : Math.abs(u.x - front(u.side)) > 120);
+      const hold = threat || (lead ? (u.x - lead.x)*d > -20 : Math.abs(u.x - front(u.side)) > 120);   // keep close behind the front, within reach of enemy fire
       if (!hold){ u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
       continue;
     }
