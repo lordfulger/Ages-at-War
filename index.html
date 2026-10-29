@@ -136,6 +136,15 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   .titleScr{grid-template-columns:1.15fr 1fr;align-items:center;column-gap:28px}
 }
 
+/* chat: small fading lines at the top, never in the way of taps */
+#chatFeed{position:absolute;top:46px;left:50%;transform:translateX(-50%);width:min(440px,56%);display:grid;gap:3px;z-index:3;pointer-events:none}
+.chatLine{justify-self:center;max-width:100%;background:rgba(20,12,6,.62);border-radius:8px;padding:3px 9px;font-size:14px;line-height:1.25;color:var(--ink);overflow-wrap:anywhere;transition:opacity .9s}
+.chatLine.fade{opacity:0}
+#chatBox{position:absolute;top:46px;left:50%;transform:translateX(-50%);width:min(440px,92vw);z-index:4;background:rgba(24,16,9,.95);border:1.5px solid var(--edge);border-radius:12px;padding:8px;display:grid;gap:8px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
+#chatBox .chip{padding:6px 10px;font-size:14px}
+#chatInput{min-width:0;height:42px;border-radius:10px;border:1.5px solid #4a3322;background:#2b1d12;color:var(--ink);font:600 16px var(--body);padding:0 12px}
+#chatInput:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
 /* overlays */
 .overlay{position:absolute;inset:0;z-index:5;overflow-y:auto;background:rgba(28,19,12,.82);display:flex;flex-direction:column;align-items:center;
   padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -199,9 +208,15 @@ details[open].card summary::after{content:" −"}
   <canvas id="field" aria-label="Battlefield. Drag to look along it."></canvas>
   <div class="topbar" id="topbar" hidden>
     <canvas id="mini" aria-label="Map of the whole battlefield. Tap to jump there."></canvas>
+    <button class="pause" id="chatBtn" aria-label="Chat" hidden><svg viewBox="0 0 16 16"><path d="M2 2.5h12v8.5H7l-3.5 3v-3H2z"/></svg></button>
     <button class="pause" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
   </div>
   <div id="trays" hidden><div class="tray" id="tray0"></div><div class="tray" id="tray1"></div></div>
+  <div id="chatFeed" aria-live="polite"></div>
+  <div id="chatBox" hidden>
+    <div class="chips" id="chatQuick"></div>
+    <form id="chatForm" class="joinRow"><input id="chatInput" maxlength="80" placeholder="Type a message" autocomplete="off" aria-label="Chat message"><button class="cta ghost" type="submit">Send</button></form>
+  </div>
 
   <div class="overlay" id="menu">
     <div class="panel menuPanel">
@@ -2462,6 +2477,8 @@ function buildTrays(){
   }
   $('#trays').hidden = S.mode === 'demo' || shown === 0;
   $('#topbar').hidden = S.mode === 'demo';
+  $('#chatBtn').hidden = !NET.role || S.mode === 'demo';
+  if (S.mode === 'demo') chatOpen(false);
   // reopen any upgrades panel straight away so it doesn't blink, then size it once the layout settles
   const reopen = () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); togglePanel(s, i, true, true); });
   reopen();
@@ -2548,7 +2565,9 @@ const app = $('#app');
 app.addEventListener('pointerdown', e => { if (e.target.closest('.tray') && press(e)) e.preventDefault(); });
 app.addEventListener('click', e => { if (e.detail === 0 && e.target.closest('.tray')) press(e); });   // keyboard activation; taps are handled on pointerdown
 document.addEventListener('keydown', e => {
+  if (e.target && e.target.closest && e.target.closest('input')) return;   // typing a chat message or room code
   if (!S || S.mode === 'demo' || S.over >= 0) return;
+  if (e.key === 'Enter' && NET.role){ chatOpen(true); e.preventDefault(); return; }
   if (e.key === 'Escape' || e.key === 'p'){ togglePause(!paused); return; }
   const seat = S.sides[0].seats.findIndex(sd => sd.kind === 'human' && sd.alive); if (seat < 0) return;
   const k = e.key.toLowerCase(), n = '1234567'.indexOf(k), a = {q:'def', w:'barrage', e:'up', a:'age', x:'cancel', r:'repair'}[k];
@@ -2724,6 +2743,7 @@ function hostLost(conn){
   renderLineup();
 }
 function onHostData(conn, m){
+  if (m && m.t === 'chat'){ const key = ownerKey(conn.peer); hostChat(key ? key.split('-').map(Number) : null, m.text); return; }
   if (!m || m.t !== 'act' || !S || S.mode !== 'battle') return;
   const key = ownerKey(conn.peer); if (!key) return;
   const [s, i] = key.split('-').map(Number), sd = S.sides[s].seats[i];
@@ -2784,6 +2804,7 @@ function onClientData(m){
     return;
   }
   if (m.t === 'start'){ clientStart(m); return; }
+  if (m.t === 'chat'){ chatShow(String(m.name || 'Player'), String(m.col || '#f6ead2'), String(m.text || '').slice(0, 80)); sfx('click'); return; }
   if (m.t === 'snap') applySnap(m);
 }
 function clientStart(m){
@@ -2874,6 +2895,44 @@ $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
 $('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
+
+/* =================== chat for online games =================== */
+const CHAT_QUICK = ['Good luck!', 'Nice!', 'Help!', 'Attack now!', 'Hold the line!', 'Good game!'];
+$('#chatQuick').innerHTML = CHAT_QUICK.map(q => `<button class="chip" type="button" data-q="${q}">${q}</button>`).join('');
+function chatOpen(on){
+  const box = $('#chatBox'); box.hidden = !on; $('#chatFeed').hidden = on;
+  if (on){ $('#chatInput').value = ''; } else $('#chatInput').blur();
+}
+function chatShow(name, col, text){
+  const feed = $('#chatFeed'), line = document.createElement('div'), who = document.createElement('b');
+  line.className = 'chatLine'; who.textContent = name + ': '; who.style.color = col;
+  line.append(who, document.createTextNode(text));   // plain text only, never markup
+  feed.appendChild(line);
+  while (feed.children.length > 4) feed.firstChild.remove();
+  setTimeout(() => line.classList.add('fade'), 6000); setTimeout(() => line.remove(), 7000);
+}
+function mySeat(){
+  if (NET.role === 'client') return NET.mySeat;
+  for (let s = 0; s < 2; s++) for (let i = 0; i < S.sides[s].seats.length; i++) if (S.sides[s].seats[i].kind === 'human') return [s, i];
+  return null;
+}
+// the host names and colours every message, then passes it to everyone
+function hostChat(seat, text){
+  text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 80); if (!text) return;
+  const [s, i] = seat || [0, 0], col = PAL[s][i] || PAL[s][0];
+  sendAll({t:'chat', name:col.name, col:col.hi, text});
+  chatShow(col.name, col.hi, text); sfx('click');
+}
+function chatSend(text){
+  text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (text && NET.role === 'client') sendAll({t:'chat', text});
+  else if (text && NET.role === 'host') hostChat(mySeat(), text);
+  chatOpen(false);
+}
+$('#chatBtn').addEventListener('click', () => chatOpen($('#chatBox').hidden));
+$('#chatQuick').addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) chatSend(b.dataset.q); });
+$('#chatForm').addEventListener('submit', e => { e.preventDefault(); chatSend($('#chatInput').value); });
+$('#chatInput').addEventListener('keydown', e => { if (e.key === 'Escape') chatOpen(false); });
 
 /* =================== loop =================== */
 const portrait = window.matchMedia('(orientation: portrait)');
