@@ -98,6 +98,8 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upCard.off{filter:grayscale(.7) brightness(.6)}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
 .seg4{grid-template-columns:repeat(4,1fr)}
+#mapPreview{display:block;width:100%;aspect-ratio:16/6;border-radius:10px;border:1.5px solid var(--edge);background:#140d08}
+#mapName{margin:0;color:var(--gold)}
 .sideRow{grid-template-columns:62px repeat(3,1fr);gap:6px}
 .slot{font-size:15px}
 .slot:disabled{opacity:.35;cursor:default}
@@ -233,6 +235,8 @@ details[open].card summary::after{content:" −"}
           <div class="lineup">
             <div class="label">Battlefield</div>
             <div class="chips" id="mapSeg"><button class="chip" data-m="coast">Desert coast</button><button class="chip" data-m="sunset">Aqueduct</button><button class="chip" data-m="valley">Green valley</button><button class="chip" data-m="winter">Winter pass</button><button class="chip" data-m="canyon">Canyon</button><button class="chip" data-m="jungle">Jungle</button><button class="chip" data-m="random">Random</button></div>
+            <canvas id="mapPreview" aria-label="Live preview of the chosen battlefield"></canvas>
+            <p class="note" id="mapName"></p>
           </div>
         </div>
         <button class="cta big" id="startBtn">Start battle</button>
@@ -1230,6 +1234,7 @@ $('#menu').addEventListener('click', e => {
   if (d) diff = d.dataset.d;
   if (m) mapPick = m.dataset.m;
   if (slot || chip || d || m){ audioInit(); renderLineup(); }
+  if (m) previewMap();
 });
 
 /* =================== state =================== */
@@ -2524,14 +2529,15 @@ async function keepAwake(){ try { if (navigator.wakeLock && !wake){ wake = await
 const randomMap = () => MAPS[Math.floor(Math.random()*MAPS.length)];
 const pickMap = () => mapPick === 'random' ? randomMap() : mapPick;
 function startDemo(){
-  newGame('demo', [['cpu'],['cpu']], randomMap(), colors, true); paused = false;
+  const fromBattle = $('#menu').hidden;   // only jump back to the title screen when coming out of a battle
+  newGame('demo', [['cpu'],['cpu']], mapPick === 'random' ? randomMap() : mapPick, colors, true); paused = false;
   const age = Math.floor(Math.random()*AGES.length);
   S.sides.forEach((side, s) => { side.seats.forEach(sd => sd.age = age); refreshMax(s); side.seats.forEach(sd => sd.hp = sd.max); });
   S.t = Math.random()*180;
   openPanels.clear(); buildTrays(); layout();
   document.body.classList.remove('battle');
   $('#menu').hidden = false; $('#pauseOv').hidden = true; $('#endOv').hidden = true;
-  if (!NET.role) showScreen('title');
+  if (!NET.role && fromBattle) showScreen('title');
   A.mode = 'menu'; setAmbience();
   netLobby(); netShow();
 }
@@ -2810,7 +2816,24 @@ $('#leaveBtn').addEventListener('click', () => { leaveNet(); if (S && S.mode !==
 
 /* =================== main menu screens and options =================== */
 let OPT = Object.assign({shake:true, follow:true, gfx:'high'}, store.get('opts', {}));
-function showScreen(name){ document.querySelectorAll('#menu .screen').forEach(el => el.hidden = el.dataset.screen !== name); $('#menu').scrollTop = 0; }
+function showScreen(name){ document.querySelectorAll('#menu .screen').forEach(el => el.hidden = el.dataset.screen !== name); $('#menu').scrollTop = 0; if (name === 'setup') previewMap(); }
+// battlefield preview: the battle behind the menu switches to the chosen map, and a window in the setup screen shows it
+const MAP_NAMES = {coast:'Desert coast', sunset:'Aqueduct', valley:'Green valley', winter:'Winter pass', canyon:'Canyon', jungle:'Jungle'};
+const preview = $('#mapPreview'), pctx = preview.getContext('2d');
+function previewMap(){
+  const m = mapPick === 'random' ? (S && S.mode === 'demo' ? randomMap() : S.map) : mapPick;
+  if (S && S.mode === 'demo' && S.map !== m){ S.map = m; renderLayers(); setAmbience(); }
+  $('#mapName').textContent = mapPick === 'random' ? `Random: each battle picks a new battlefield. Showing the ${MAP_NAMES[m]}.` : MAP_NAMES[m];
+}
+function drawPreview(){
+  const screen = document.querySelector('#menu .screen[data-screen="setup"]');
+  if ($('#menu').hidden || !screen || screen.hidden || !S || S.mode !== 'demo') return;
+  const r = preview.getBoundingClientRect(); if (!r.width) return;
+  const w = Math.round(r.width*dpr), h = Math.round(r.height*dpr);
+  if (preview.width !== w || preview.height !== h){ preview.width = w; preview.height = h; }
+  const sh = Math.min(cv.height, cv.width*h/w);   // the battlefield band, cropped to the window's shape
+  pctx.drawImage(cv, 0, Math.max(0, cv.height*.86 - sh), cv.width, sh, 0, 0, w, h);
+}
 $('#menu').addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g){ audioInit(); showScreen(g.dataset.go); } });
 const flipOpt = (k, v) => { OPT[k] = v; store.set('opts', OPT); setToggles(); };
 $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
@@ -2828,7 +2851,7 @@ function frame(now){
   else if (S && !paused && S.over < 0 && !blocked) update(dt);
   else if (S && S.over >= 0){ for (const f of S.fx) f.t += dt; S.fx = S.fx.filter(f => f.t < f.dur); }
   if (S){ moveCam(dt); A.nextStyle = styleForAge(musicAge()); }
-  draw();
+  draw(); drawPreview();
   if (S && S.mode !== 'demo'){ syncUI(); drawMini(); }
   if (NET.role === 'host' && S && S.mode === 'battle' && NET.conns.length){ NET.snapT += dt; if (NET.snapT >= .1){ NET.snapT = 0; hostSnap(); } }
   ambT += dt;
