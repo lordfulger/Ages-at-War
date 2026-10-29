@@ -512,15 +512,28 @@ function startAmbience(){
   A.wind = loopNoise('bandpass', 500, .7, .09);
   const o = c.createOscillator(), og = c.createGain(); o.frequency.value = .05; og.gain.value = 260; o.connect(og).connect(A.wind.f.frequency); o.start();
   A.surf = loopNoise('lowpass', 650, .5, .12);
+  A.leaves = loopNoise('highpass', 4200, .4, .17);     // rustling trees
+  A.brook = loopNoise('bandpass', 1500, 1.1, .9);      // a small river's trickle
   A.crowd = loopNoise('bandpass', 750, 1.4, .3);
   setAmbience();
 }
+// [wind, waves, trees, river] for each battlefield: water only where there is water, trees where there are trees
+const AMBIENCE = {
+  coast:  [.08, .1,  .01, 0],
+  sunset: [.14, 0,   0,   0],
+  valley: [.05, 0,   .07, .03],
+  winter: [.32, 0,   .03, 0],
+  canyon: [.22, 0,   0,   0],
+  jungle: [.03, 0,   .09, 0]
+};
 function setAmbience(){
   if (!A.ctx || !A.wind) return;
   const t = A.ctx.currentTime, map = S ? S.map : 'coast', on = A.mode !== 'quiet';
-  const lv = {coast:[.12,.3], sunset:[.16,0], valley:[.08,0], winter:[.4,0], canyon:[.22,0], jungle:[.05,.06]}[map] || [.1,0];
+  const lv = AMBIENCE[map] || [.1, 0, 0, 0];
   A.wind.g.gain.setTargetAtTime(on ? lv[0] : 0, t, .6);
   A.surf.g.gain.setTargetAtTime(on ? lv[1] : 0, t, .6);
+  A.leaves.g.gain.setTargetAtTime(on ? lv[2] : 0, t, .6);
+  A.brook.g.gain.setTargetAtTime(on ? lv[3] : 0, t, .6);
   A.crowd.g.gain.setTargetAtTime(A.mode === 'battle' && S ? Math.min(.14, .02 + S.units.length*.003) : 0, t, .8);
 }
 function ambientEvent(t){
