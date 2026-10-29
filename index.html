@@ -330,7 +330,7 @@ const ROLE = {
   heavy:{cost:250, hp:620, dmg:38, rate:1.4, range:38,  speed:38, train:6,   r:34, trample:50},
   siege:{cost:220, hp:120, dmg:50, rate:3.6, range:400, speed:28, train:6.5, r:28, splash:50, siege:2.2, minRange:140},
   pike: {cost:55,  hp:120, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
-  support:{cost:65, hp:95, dmg:0,  rate:.6,  range:0,   speed:46, train:2.2, r:14, healer:36}
+  support:{cost:65, hp:95, dmg:0,  rate:.9,  range:0,   speed:46, train:2.2, r:14, healer:20, healGap:1.2}
 };
 // who beats whom: pikes stop riders and heavies, ranged troops shoot down pikes and fighters, riders run down
 // ranged troops, siege and healers, heavies trample fighters, and fighters overrun siege engines
@@ -1577,7 +1577,7 @@ function update(dt){
       if (u.atk <= 0){
         let best = null, bf = 1;
         // heal reach is short, and each troop takes healing at most every 0.6 seconds, so piling healers behind one tank stops paying off
-        for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 70 && S.t - (f.healedAt || -9) >= .6){ const fr = f.hp/f.max; if (fr < bf){ bf = fr; best = f; } }
+        for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 70 && S.t - (f.healedAt || -9) >= (st.healGap || 1)){ const fr = f.hp/f.max; if (fr < bf){ bf = fr; best = f; } }
         if (best){ u.atk = st.rate; u.lunge = .25; best.healedAt = S.t; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
       }
       const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 40);
