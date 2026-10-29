@@ -267,6 +267,7 @@ details[open].card summary::after{content:" −"}
         <div class="card optGrid">
           <button class="toggle" id="musicT" aria-pressed="true">Music <i>High</i></button>
           <button class="toggle" id="sfxT" aria-pressed="true">Effects <i>High</i></button>
+          <button class="toggle" id="ambT" aria-pressed="true">Background sounds <i>Low</i></button>
           <button class="toggle" id="cycleT" aria-pressed="true">Day and night <i>On</i></button>
           <button class="toggle" id="shakeT" aria-pressed="true">Screen shake <i>On</i></button>
           <button class="toggle" id="followT" aria-pressed="true">Camera follows battle <i>On</i></button>
@@ -459,8 +460,8 @@ const store = {
 
 /* =================== audio: original era music, effects and ambience, all synthesized =================== */
 const A = {ctx:null, music:null, sfx:null, amb:null, rev:null, noise:null, seqT:0, step:0, mode:'menu', style:1, nextStyle:1,
-  musicLv:store.get('musicLv', 2), sfxLv:store.get('sfxLv', 2), last:{}};
-const MUSIC_GAIN = [0, .16, .3], SFX_GAIN = [0, .28, .55], LEVEL_NAME = ['Off', 'Low', 'High'];
+  musicLv:store.get('musicLv', 2), sfxLv:store.get('sfxLv', 2), ambLv:store.get('ambLv', 1), last:{}};
+const MUSIC_GAIN = [0, .16, .3], SFX_GAIN = [0, .28, .55], AMB_GAIN = [0, .3, .65], LEVEL_NAME = ['Off', 'Low', 'High'];
 function audioInit(){
   if (A.ctx){ if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
   try {
@@ -475,7 +476,7 @@ function audioInit(){
     const ms = c.createGain(); ms.gain.value = .35; A.music.connect(ms).connect(A.rev);
     A.sfx = c.createGain(); A.sfx.connect(comp);
     const ss = c.createGain(); ss.gain.value = .18; A.sfx.connect(ss).connect(A.rev);
-    A.amb = c.createGain(); A.amb.gain.value = 1; A.amb.connect(A.sfx);
+    A.amb = c.createGain(); A.amb.gain.value = AMB_GAIN[A.ambLv]; A.amb.connect(A.sfx);
     const b = c.createBuffer(1, c.sampleRate*2, c.sampleRate), d = b.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
     A.noise = b; A.seqT = c.currentTime + .1;
@@ -483,7 +484,7 @@ function audioInit(){
     setInterval(schedule, 25);
   } catch(e){}
 }
-function applyLevels(){ if (!A.ctx) return; A.music.gain.value = MUSIC_GAIN[A.musicLv]; A.sfx.gain.value = SFX_GAIN[A.sfxLv]; }
+function applyLevels(){ if (!A.ctx) return; A.music.gain.value = MUSIC_GAIN[A.musicLv]; A.sfx.gain.value = SFX_GAIN[A.sfxLv]; A.amb.gain.value = AMB_GAIN[A.ambLv]; }
 function tone(dest, type, f, t, dur, vol, o = {}){
   const c = A.ctx, osc = c.createOscillator(), g = c.createGain();
   osc.type = type; osc.frequency.setValueAtTime(f, t);
@@ -540,7 +541,7 @@ function setAmbience(){
   A.surf.g.gain.setTargetAtTime(on ? lv[1] : 0, t, .6);
   A.leaves.g.gain.setTargetAtTime(on ? lv[2] : 0, t, .6);
   A.brook.g.gain.setTargetAtTime(on ? lv[3] : 0, t, .6);
-  A.crowd.g.gain.setTargetAtTime(A.mode === 'battle' && S ? Math.min(.14, .02 + S.units.length*.003) : 0, t, .8);
+  A.crowd.g.gain.setTargetAtTime(A.mode === 'battle' && S ? Math.min(.07, .01 + S.units.length*.0015) : 0, t, .8);
 }
 function ambientEvent(t){
   if (!S || A.mode === 'quiet' || !A.sfxLv) return;
@@ -712,6 +713,7 @@ function setToggles(){
   const set = (id, txt, on) => { const b = document.getElementById(id); if (!b) return; b.setAttribute('aria-pressed', on); b.querySelector('i').textContent = txt; };
   if (typeof OPT === 'object'){
     set('cycleT', cyclePick ? 'On' : 'Off', cyclePick);
+    set('ambT', LEVEL_NAME[A.ambLv], A.ambLv > 0);
     set('shakeT', OPT.shake ? 'On' : 'Off', OPT.shake); set('followT', OPT.follow ? 'On' : 'Off', OPT.follow); set('gfxT', OPT.gfx === 'high' ? 'High' : 'Low', OPT.gfx === 'high');
   }
 }
@@ -2850,6 +2852,7 @@ function drawPreview(){
 $('#menu').addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g){ audioInit(); showScreen(g.dataset.go); } });
 const flipOpt = (k, v) => { OPT[k] = v; store.set('opts', OPT); setToggles(); };
 $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
+$('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
 
