@@ -72,6 +72,8 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .btn em{position:absolute;top:2px;right:3px;font:700 12px/1 var(--body);font-style:normal;background:var(--team);color:#fff;border-radius:8px;padding:2px 5px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 .btn .prog{position:absolute;left:0;bottom:0;height:3px;width:100%;background:#3fbf55;transform-origin:left;transform:scaleX(var(--p,0))}
 .btn.glow{box-shadow:0 0 0 2px var(--gold),0 0 12px rgba(242,193,78,.7)}
+.btn.arm{background:linear-gradient(#8a2c1a,#3d140c);box-shadow:0 0 0 2px #ff6a4a,0 0 14px rgba(255,90,60,.75)}
+.btn.arm small{color:#fff}
 .btn:active:not(.off){filter:brightness(1.25)}
 .duo .units{grid-template-columns:repeat(4,1fr)}
 .duo .btn.unit{height:clamp(40px,11vh,60px)}
@@ -2474,7 +2476,9 @@ function syncUI(){
     const inRange = !!barrageTarget(s); setOff(bb, !ready || !inRange); bb.classList.toggle('glow', ready && inRange); setVar(bb.querySelector('.prog'), 1 - Math.max(0, sd.bar)/cd);
     const ub = ui.acts.up, levels = UPG_KEYS.reduce((n, k) => n + sd.up[k], 0);
     setTxt(ub.querySelector('small'), sd.res.length ? `${sd.res.length} in line` : 'Open'); setVar(ub.querySelector('.prog'), sd.res.length ? sd.res[0].t/sd.res[0].dur : 0); badge(ub, levels);
-    const rb = ui.acts.repair; setTxt(rb.querySelector('small'), sd.repaired ? 'Used' : 'Once'); setOff(rb, !!sd.repaired || sd.hp >= sd.max);
+    const rb = ui.acts.repair, armed = repairArm[`${s}-${i}`] > performance.now();
+    setTxt(rb.querySelector('small'), sd.repaired ? 'Used' : armed ? 'Confirm?' : 'Once'); setOff(rb, !!sd.repaired || sd.hp >= sd.max);
+    rb.classList.toggle('arm', armed && !sd.repaired);
     const ab = ui.acts.age, last = age >= AGES.length - 1, need = last ? RANK_NEED(sd.rank || 0) : XP_NEED(age), aReady = sd.xp >= need;
     setTxt(ab.querySelector('small'), aReady ? (last ? 'Rank up' : 'Ready') : `${Math.floor(sd.xp)}/${need}`);
     setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
@@ -2491,8 +2495,17 @@ function syncUI(){
     }
   });
 }
+const repairArm = {};   // emergency repair needs a second tap within 3 seconds
 function act(s, i, role, a){
   audioInit();
+  if (a === 'repair'){
+    const key = `${s}-${i}`, sd = S.sides[s].seats[i];
+    if (!(repairArm[key] > performance.now())){
+      if (sd.repaired || sd.hp >= sd.max){ sfx('nope'); return; }
+      repairArm[key] = performance.now() + 3000; sfx('click'); return;
+    }
+    delete repairArm[key];
+  }
   if (NET.role === 'client'){ if (a === 'up') togglePanel(s, i); else { sendAll({t:'act', r:role, a}); sfx('click'); } return; }
   if (role) queueUnit(s, i, role);
   else if (a === 'cancel') cancelQueue(s, i);
