@@ -112,6 +112,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .sw[hidden]{display:none!important}
 .cv{height:26px;border-radius:8px;border:1.5px solid #4a3322;background:#2b1d12;color:var(--ink);font-weight:700;font-size:13px;cursor:pointer;padding:0 2px;white-space:nowrap;overflow:hidden}
 .cv[hidden]{display:none!important}
+.cv img{width:15px;height:15px;vertical-align:-3px;margin-right:4px}
 
 /* online play */
 .joinRow{display:grid;grid-template-columns:1fr auto;gap:8px}
@@ -801,6 +802,7 @@ function person(c, o, mounted){
       rect(c, x + s - 1.6, -1.7, 3.9, 1.7, o.age >= 4 ? '#2b1d14' : '#6b4424', .5);
     }
   }
+  if (o.civ) civBack(c, o, mounted);
   switch (body){
     case 'fur':     poly(c, [-4.6,-16, 4.6,-16, 5.2,-10, 3,-11, 1.5,-9.4, -.5,-11, -2.5,-9.4, -5,-10.5], '#8a5a2b'); break;
     case 'tunic':   poly(c, [-3.6,-16, 3.6,-16, 4.9,-10.4, -4.9,-10.4], '#efe5cc'); line(c, -1.5,-15.5, -2.2,-10.8, 'rgba(0,0,0,.15)', .5); line(c, 1.5,-15.5, 2.2,-10.8, 'rgba(0,0,0,.15)', .5); break;
@@ -825,7 +827,67 @@ function person(c, o, mounted){
   if (hat !== 'visor'){ circ(c, 0, -25.8, 3.3, SKIN); circ(c, 1.8, -26, .45, OUT, 0); }
   hatDraw(c, hat, o);
   if (hat === 'brodie' || hat === 'helmet'){ line(c, -3.4,-27.6, 3.4,-27.6, o.col, 1.3); rect(c, -3.7,-21.6, 1.8, 2.2, o.col, .3); }
+  if (o.civ) civFront(c, o, mounted);
   weapon(c, o,(body === 'fur' || body === 'tunic' || body === 'armor') ? SKIN : tc);
+}
+/* ---- civilizations: the same troops, dressed their own way ---- */
+const CIV_GOLD = '#e3b437', CIV_ROBE = '#2e3d8c', CIV_SAND = '#d9a441', CIV_LEATHER = '#8a5a30';
+function civBack(c, o, mounted){
+  const sway = Math.sin((o.ph || 0)*1.3);
+  switch (o.civ){
+    case 1:   // Warlords: a ragged war cloak
+      poly(c, [-2.8,-22.6, -1,-22.6, -3.5,-11.5, -5.6,-13, -6.8,-11, -7.6 - sway,-14, -4.4,-21], '#6e1712', .5); break;
+    case 2:   // Merchants: a fine purple cape
+      poly(c, [-2.8,-22.6, 1,-22.6, -2.5,-13.5, -6.5 - sway*.6,-14.5], '#6a2f8f', .5); line(c, -2.6,-13.6, -6.4 - sway*.6,-14.6, CIV_GOLD, .7); break;
+    case 3:   // Sages: long robes over the legs
+      if (!mounted){ poly(c, [-4.2,-16.4, 4.2,-16.4, 5.4,-2.4, -5.4,-2.4], CIV_ROBE, .6); line(c, -5.2,-3.2, 5.2,-3.2, CIV_GOLD, .8); line(c, 0,-16, 0,-3.4, 'rgba(255,255,255,.12)', .8); }
+      break;
+    case 5:   // Nomads: a long scarf trailing in the wind
+      c.strokeStyle = OUT; c.lineWidth = 2.6; c.lineCap = 'round'; c.beginPath(); c.moveTo(-1,-23.2); c.quadraticCurveTo(-5,-23.8 + sway, -9.5,-21 - sway*1.5); c.stroke();
+      c.strokeStyle = CIV_SAND; c.lineWidth = 1.7; c.stroke(); break;
+  }
+}
+function civFront(c, o, mounted){
+  switch (o.civ){
+    case 1:   // Warlords: horns, war paint and a spiked shoulder
+      poly(c, [-2.3,-28.4, -5.2,-33.4, -3.6,-29.4, -1,-29.4], '#ece0c2', .5); poly(c, [2.3,-28.4, 4.8,-33.6, 3.6,-29.4, 1,-29.4], '#ece0c2', .5);
+      if (o.age < 9) line(c, .9,-26.6, 3.1,-25.4, '#c0241a', .8);
+      ell(c, -2.4,-22, 2.3, 1.5, '#4a4440', 0, .5); poly(c, [-3.6,-23, -4.6,-25.4, -2.6,-23.2], '#cfd2d6', .4); poly(c, [-1.6,-23.2, -1.6,-25.6, -.4,-23.1], '#cfd2d6', .4);
+      break;
+    case 2:   // Merchants: a gold sash, a coin on the chest, a purse and a plume
+      line(c, -3.1,-22.3, 3.1,-16.2, OUT, 2.2); line(c, -3.1,-22.3, 3.1,-16.2, CIV_GOLD, 1.4); circ(c, .4,-19.2, 1.1, '#fff0a8', .4);
+      ell(c, 3.4,-14.2, 1.3, 1.6, CIV_LEATHER, 0, .4); line(c, 2.6,-15.6, 4.2,-15.6, CIV_GOLD, .5);
+      ell(c, -1.6,-31.2, 1.2, 2.6, '#9b59c6', -.6, .4); break;
+    case 3:   // Sages: a mantle over the shoulders and a glowing charm
+      poly(c, [-4.4,-22.9, 4.4,-22.9, 3.8,-20.6, 1.4,-21.4, 0,-20.2, -1.4,-21.4, -3.8,-20.6], CIV_ROBE, .5); line(c, -3.6,-21, 3.6,-21, CIV_GOLD, .4);
+      c.fillStyle = 'rgba(127,224,255,.35)'; c.beginPath(); c.arc(0,-18.8, 2.2, 0, Math.PI*2); c.fill(); circ(c, 0,-18.8, 1.1, '#bff3ff', .4); break;
+    case 4:   // Builders: a leather apron, a tool belt and a hammer
+      if (!mounted) poly(c, [-2.9,-17.2, 2.9,-17.2, 3.3,-10, -3.3,-10], CIV_LEATHER, .5);
+      line(c, -3.6,-16.2, 3.6,-16.2, '#4b3018', 1.3); rect(c, 1.2,-16.9, 1.4, 1.4, '#c9a227', .3);
+      line(c, -3.4,-16, -4.4,-11.4, WOOD, 1); rect(c, -5.9,-12.4, 3, 1.5, '#7b7f86', .4); break;
+    case 5:   // Nomads: a wrapped scarf and a feather
+      rect(c, -3.4,-23.8, 6.8, 1.6, CIV_SAND, .4);
+      c.save(); c.translate(-2.6,-29.2); c.rotate(-.55); ell(c, 0,-2.6, 1, 3, '#f4efe2', 0, .4); line(c, 0,-.2, 0,-5.2, '#8a7a60', .4); c.restore(); break;
+  }
+}
+// each civilization's badge, for banners, pennants and the setup screen
+function civEmblem(c, k, x, y, r){
+  c.save(); c.translate(x, y); c.scale(r/10, r/10);
+  switch (k){
+    case 1: for (const sgn of [1, -1]){ line(c, -6*sgn,6, 6*sgn,-6, OUT, 3.4); line(c, -6*sgn,6, 6*sgn,-6, '#e4e7eb', 2); line(c, -4.4*sgn,1.6, -1.6*sgn,4.4, CIV_GOLD, 2.2); } break;
+    case 2: circ(c, 0, 0, 7.5, CIV_GOLD, 1.2); circ(c, 0, 0, 5, '#f5d264', .8); rect(c, -1.6,-1.6, 3.2, 3.2, '#a8781c', .6); break;
+    case 3: poly(c, [0,-8.5, 2,-2, 8.5,0, 2,2, 0,8.5, -2,2, -8.5,0, -2,-2], '#bff3ff', 1); circ(c, 0, 0, 1.8, '#ffffff', 0); break;
+    case 4: c.rotate(-.6); rect(c, -1.2,-4, 2.4, 12, WOOD, 1); rrect(c, -6,-8, 12, 5, 1, '#8b9097', 1); break;
+    case 5: poly(c, [-8,6, 0,-8, 8,6], CIV_SAND, 1.2); poly(c, [-2,6, 0,1, 2,6], '#4b3018', .6); line(c, 0,-8, 0,-10.5, OUT, 1); break;
+  }
+  c.restore();
+}
+// vehicles and engines fly a pennant with the badge
+function civPennant(c, o){
+  const wave = Math.sin((o.ph || 0)*1.5)*1.2;
+  line(c, -10,-6, -10,-42, '#2a1a0c', 1.1);
+  c.beginPath(); c.moveTo(-10,-42); c.quadraticCurveTo(-4,-41 + wave, 4,-37.5 + wave); c.quadraticCurveTo(-4,-34.5 + wave, -10,-33); c.closePath(); fs(c, o.col, .6);
+  civEmblem(c, o.civ, -5.5, -38, 2.6);
 }
 function hatDraw(c, hat, o){
   switch (hat){
@@ -1178,12 +1240,16 @@ const SIEGE = {
 function drawFig(c, d, o){
   if (d.f === 'p') person(c, {...o, w:d.w}, false);
   else if (d.f === 'm') MOUNT[d.m](c, {...o, armor:d.armor}, d.w);
-  else if (d.f === 'v') VEH[d.v](c, o);
-  else SIEGE[d.s](c, {...o, size:d.size});
+  else { if (o.civ) civPennant(c, o); if (d.f === 'v') VEH[d.v](c, o); else SIEGE[d.s](c, {...o, size:d.size}); }
 }
 
 /* ---- icons ---- */
 const iconCache = {};
+function civIcon(k){
+  const key = 'civ' + k; if (iconCache[key]) return iconCache[key];
+  const [cv, c] = mk(40, 40, 2); civEmblem(c, k, 20, 20, 17);
+  return iconCache[key] = cv.toDataURL();
+}
 function cropTo(big, out, pad){
   const bc = big.getContext('2d'), d = bc.getImageData(0, 0, big.width, big.height).data, W = big.width, H = big.height;
   let x0 = W, y0 = H, x1 = 0, y1 = 0;
@@ -1194,22 +1260,22 @@ function cropTo(big, out, pad){
   o.drawImage(big, x0, y0, bw, bh, (out.width - dw)/2, out.height - pad - dh, dw, dh);
   return out.toDataURL();
 }
-function unitIcon(age, role, col){
-  const key = age + role + col.base; if (iconCache[key]) return iconCache[key];
+function unitIcon(age, role, col, civ){
+  const key = age + role + col.base + (civ || 0); if (iconCache[key]) return iconCache[key];
   const big = document.createElement('canvas'); big.width = 300; big.height = 200; const c = big.getContext('2d');
   c.translate(150, 190); c.scale(2.6, 2.6);
-  drawFig(c, STATS[age][role].d, {age, col:col.base, hi:col.hi, ph:0, atk:false});
+  drawFig(c, STATS[age][role].d, {age, col:col.base, hi:col.hi, ph:0, atk:false, civ});
   const out = document.createElement('canvas'); out.width = out.height = 96;
   return iconCache[key] = cropTo(big, out, 3);
 }
-function defIcon(age, col){
-  const key = 'def' + age + col.base; if (iconCache[key]) return iconCache[key];
+function defIcon(age, col, civ){
+  const key = 'def' + age + col.base + (civ || 0); if (iconCache[key]) return iconCache[key];
   const big = document.createElement('canvas'); big.width = 200; big.height = 200; const c = big.getContext('2d');
   c.translate(100, 190); c.scale(2.6, 2.6);
   rect(c, -16,-22, 32, 22, vgrad(c, -22, 0, '#c9b190', '#8e7656'));
   for (let x = -16; x < 16; x += 8) rect(c, x,-27, 5, 5, '#b39a76', .5);
   c.translate(0,-22); c.scale(.9, .9);
-  person(c, {age, col:col.base, hi:col.hi, w:STATS[age].rng.d.w, ph:0}, false);
+  person(c, {age, col:col.base, hi:col.hi, w:STATS[age].rng.d.w, ph:0, civ}, false);
   const out = document.createElement('canvas'); out.width = out.height = 96;
   return iconCache[key] = cropTo(big, out, 3);
 }
@@ -1415,7 +1481,7 @@ function spawn(s, i, it){
   const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp');
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
     atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * CV(sd, 'dmg'), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
-    rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
+    civ:sd.civ || 0, rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
   sfx(d.f === 'm' ? d.m : d.f === 'v' ? (it.a >= 6 ? (d.v === 'hover' || d.v === 'mech' ? 'hum' : 'engine') : 'creak') : d.f === 's' ? (it.a >= 6 ? 'engine' : 'creak') : 'foot', front(s));
@@ -1442,7 +1508,7 @@ function hurtUnit(e, amt, src){
     const bounty = st.cost * .2 * cut;
     foe.seats.forEach(sd => sd.gold += bounty / foe.seats.length * (1 + .05*sd.up.plunder));
     foe.seats.forEach(sd => { if (sd.alive) sd.xp += st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length); });
-    S.fx.push({k:'corpse', d:st.d, age:e.age, side:e.side, col:e.col, x:e.x, z:e.z, t:0, dur:4});
+    S.fx.push({k:'corpse', d:st.d, age:e.age, civ:e.civ, side:e.side, col:e.col, x:e.x, z:e.z, t:0, dur:4});
     S.fx.push({k:'coin', x:e.x, z:e.z, t:0, dur:.9, txt:'+' + Math.round(bounty)});
     if (st.d.f === 'v' || st.d.f === 's'){ S.fx.push({k:'boom', x:e.x, z:e.z, t:0, dur:.55, big:true, seed:Math.random()}); sfx('wreck', e.x); }
     else { sfx('grunt', e.x); sfx('fall', e.x); }
@@ -2072,6 +2138,7 @@ function renderFort(s, i){
   const [fc, c] = mk(w, h, sc);
   c.save(); if (s === 1){ c.translate(w, 0); c.scale(-1, 1); }
   FORTS[style](c, w, h, team, rng(7 + age*13 + s*3 + i*29));
+  if (sd.civ) civFort(c, w, h, sd.civ, team, h*(1 - FORT_ROOF[style]), age);
   c.restore();
   if (!sd.alive){   // a fallen fortress: scorched, broken open, rubble at its foot
     const R = rng(77 + i + s*5);
@@ -2083,6 +2150,54 @@ function renderFort(s, i){
   }
   if (!fortCv[s]) fortCv[s] = [];
   fortCv[s][i] = {cv:fc, w, h};
+}
+// each civilization adds its own touches to the fortress, drawn facing right like the fortress itself
+function civFort(c, w, h, k, team, roof, age){
+  const u = Math.min(w, h)/100, R = rng(31 + k*7 + age);
+  const bx = w*.36, bw = w*.11, bh = h*.2, by = roof + h*.05;   // a long banner down the wall with the badge
+  c.fillStyle = team.base; c.strokeStyle = OUT; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(bx, by); c.lineTo(bx + bw, by); c.lineTo(bx + bw, by + bh); c.lineTo(bx + bw/2, by + bh*.82); c.lineTo(bx, by + bh); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = '#2a1a0c'; c.fillRect(bx - bw*.12, by - 2, bw*1.24, 3);
+  civEmblem(c, k, bx + bw/2, by + bh*.4, bw*.36);
+  switch (k){
+    case 1:   // Warlords: sharpened stakes along the foot and spiked poles
+      for (let x = w*.02; x < w*.6; x += w*.045){ c.fillStyle = '#5a3a1c'; c.beginPath(); c.moveTo(x, h); c.lineTo(x + w*.035, h - h*.09 - R()*h*.03); c.lineTo(x + w*.03, h); c.fill(); c.strokeStyle = OUT; c.lineWidth = .8; c.stroke(); }
+      for (const x of [w*.05, w*.62]){ line(c, x, roof + 2, x, roof - h*.24, '#2a1a0c', 2.2); poly(c, [x - 4*u, roof - h*.24, x, roof - h*.24 - 9*u, x + 4*u, roof - h*.24], '#cfd2d6', 1); civEmblem(c, 1, x, roof - h*.13, 5*u); }
+      break;
+    case 2:   // Merchants: gilded trim, a golden dome and a heap of treasure
+      c.fillStyle = CIV_GOLD; c.fillRect(0, roof - 1, w*.9, 3);
+      c.fillStyle = vgrad(c, roof - h*.2, roof, '#ffe58a', '#b8861f'); c.beginPath(); c.ellipse(w*.18, roof, w*.09, h*.17, 0, Math.PI, 0); c.fill(); c.strokeStyle = OUT; c.lineWidth = 1; c.stroke();
+      line(c, w*.18, roof - h*.17, w*.18, roof - h*.24, '#b8861f', 2); circ(c, w*.18, roof - h*.25, 3*u, CIV_GOLD, 1);
+      rect(c, w*.06, h - h*.09, w*.11, h*.09, CIV_LEATHER, 1); rect(c, w*.06, h - h*.1, w*.11, h*.025, '#5a3a1c', 1);
+      for (let n = 0; n < 9; n++) circ(c, w*(.05 + R()*.17), h - h*.1 - R()*h*.05, 2.4*u, n % 3 ? CIV_GOLD : '#fff0a8', .6);
+      break;
+    case 3: {   // Sages: a slender tower crowned by a glowing orb
+      const tx = w*.12, tw = w*.07, top = Math.max(h*.2, roof - h*.3);
+      rect(c, tx - tw/2, top, tw, h - top, vgrad(c, top, h, '#3d4c9c', '#1e2760'), 1.2);
+      for (let y = top + h*.08; y < h - h*.05; y += h*.09) rect(c, tx - tw*.15, y, tw*.3, h*.04, '#bff3ff', .6);
+      poly(c, [tx - tw*.75, top, tx, top - h*.1, tx + tw*.75, top], CIV_ROBE, 1);
+      const g = c.createRadialGradient(tx, top - h*.13, 1, tx, top - h*.13, 12*u); g.addColorStop(0, 'rgba(191,243,255,.9)'); g.addColorStop(1, 'rgba(191,243,255,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(tx, top - h*.13, 12*u, 0, Math.PI*2); c.fill(); circ(c, tx, top - h*.13, 3.5*u, '#e8fbff', .8);
+      break; }
+    case 4: {   // Builders: scaffolding and a crane, always adding to the walls
+      const x0 = w*.02, x1 = w*.22;
+      c.strokeStyle = WOOD; c.lineWidth = 2;
+      for (const x of [x0, (x0 + x1)/2, x1]){ c.beginPath(); c.moveTo(x, h); c.lineTo(x, roof - h*.06); c.stroke(); }
+      for (let y = h - h*.12; y > roof - h*.06; y -= h*.14){ c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke(); rect(c, x0 - 2, y - 2, x1 - x0 + 4, 3, '#a8753f', .6); }
+      c.lineWidth = 1.2; c.beginPath(); c.moveTo(x0, h - h*.12); c.lineTo((x0 + x1)/2, roof); c.stroke();
+      const cx = w*.6; line(c, cx, roof, cx, roof - h*.3, '#c9a227', 3); line(c, cx - w*.05, roof - h*.3, cx + w*.2, roof - h*.3, '#c9a227', 3);
+      line(c, cx + w*.17, roof - h*.3, cx + w*.17, roof - h*.16, '#2a2a2a', .8); rect(c, cx + w*.15, roof - h*.16, w*.04, h*.04, '#9a9da5', .8);
+      break; }
+    case 5:   // Nomads: tents and a horse-tail standard by the walls
+      for (const [x, sz] of [[w*.07, 1], [w*.2, .8]]){
+        const tw = w*.12*sz, th = h*.2*sz;
+        poly(c, [x - tw/2, h, x, h - th, x + tw/2, h], CIV_SAND, 1.2); poly(c, [x - tw*.12, h, x, h - th*.45, x + tw*.12, h], '#4b3018', .6);
+        line(c, x, h - th, x, h - th - 5*u, '#2a1a0c', 1.2); line(c, x - tw*.3, h - th*.6, x + tw*.3, h - th*.6, team.base, 2);
+      }
+      line(c, w*.6, roof + 2, w*.6, roof - h*.26, '#2a1a0c', 2); civEmblem(c, 5, w*.6, roof - h*.26, 5*u);
+      for (let n = 0; n < 5; n++) line(c, w*.6, roof - h*.22, w*.6 - 3*u + n*1.5*u, roof - h*.1, '#3a2412', 1.4);
+      break;
+  }
 }
 function renderForts(s){ if (S) S.sides[s].seats.forEach((sd, i) => renderFort(s, i)); }
 
@@ -2201,7 +2316,7 @@ function drawFort(s, i){
     const n = Math.min(7, defenders(s, i)), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
     for (let a = 0; a < n; a++){
       ctx.save(); ctx.translate(X(defX(s, i, a)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
-      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK % 7 === a && sd.defT > .5/defenders(s, i), ph:0}, false);
+      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK % 7 === a && sd.defT > .5/defenders(s, i), ph:0, civ:sd.civ}, false);
       ctx.restore();
     }
   }
@@ -2222,7 +2337,7 @@ function drawUnit(u, alpha){
   if (x < -120 || x > cw + 120) return;
   ctx.fillStyle = 'rgba(40,25,10,.28)'; ctx.beginPath(); ctx.ellipse(x, y, st.r*ppw*1.1, 3*k, 0, 0, Math.PI*2); ctx.fill();
   ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.scale(d*k, k);
-  drawFig(ctx, st.d, {age:u.age, col:c.base, hi:c.hi, ph:u.step, atk:u.lunge > 0});
+  drawFig(ctx, st.d, {age:u.age, col:c.base, hi:c.hi, ph:u.step, atk:u.lunge > 0, civ:u.civ});
   ctx.restore();
   if (u.hp < u.max){
     const w = Math.max(18, st.r*ppw*1.6);
@@ -2334,7 +2449,7 @@ function draw(){
       const p = f.t/f.dur, c = PAL[f.side][f.col], d = dirOf(f.side), k = scaleK(f.z), x = X(f.x);
       if (x < -120 || x > cw + 120) continue;
       ctx.save(); ctx.globalAlpha = Math.min(1, (1 - p)*2); ctx.translate(x, laneY(f.z));
-      if (f.d.f === 'p' || f.d.f === 'm'){ ctx.rotate(-d*1.45*Math.min(1, f.t*5)); ctx.scale(d*k, k); drawFig(ctx, f.d, {age:f.age, col:c.base, hi:c.hi, ph:0, atk:false}); }
+      if (f.d.f === 'p' || f.d.f === 'm'){ ctx.rotate(-d*1.45*Math.min(1, f.t*5)); ctx.scale(d*k, k); drawFig(ctx, f.d, {age:f.age, col:c.base, hi:c.hi, ph:0, atk:false, civ:f.civ}); }
       else { ctx.scale(d*k, k); drawFig(ctx, f.d, {age:f.age, col:'#444444', hi:'#666666', ph:0, atk:false}); }
       ctx.restore();
       if (f.d.f === 'v' || f.d.f === 's') for (let q = 0; q < 3; q++){ const t = (f.t*.6 + q/3) % 1; ctx.fillStyle = `rgba(60,60,60,${.45*(1 - t)*(1 - p)})`; ctx.beginPath(); ctx.arc(x + Math.sin(q*2 + f.t)*6, laneY(f.z) - fh*.08 - t*fh*.2, fh*(.03 + t*.04), 0, Math.PI*2); ctx.fill(); }
@@ -2458,7 +2573,8 @@ function renderSwatches(){
       b.style.setProperty('--sw', col.base); b.style.setProperty('--swHi', col.hi); b.style.setProperty('--swInk', inkOn(col));
       b.textContent = col.name; b.setAttribute('aria-label', `Commander ${i + 1} color: ${col.name}. Tap to change.`);
       const cv = $(`#cv-${s}-${i}`), civ = CIVS[civs[s][i]];
-      cv.hidden = !lineup[s][i]; cv.textContent = civ.name; cv.title = civ.desc;
+      cv.hidden = !lineup[s][i]; cv.title = civ.desc;
+      const html = (civs[s][i] > 0 && civs[s][i] < CIV_RANDOM ? `<img src="${civIcon(civs[s][i])}" alt="">` : '') + civ.name; if (cv.innerHTML !== html) cv.innerHTML = html;
       cv.setAttribute('aria-label', `Commander ${i + 1} civilization: ${civ.name}, ${civ.desc}. Tap to change.`);
     }
   }
@@ -2485,14 +2601,14 @@ const openPanels = new Set();
 function seatHTML(s, i){
   const c = PAL[s][i], side = S.sides[s], sd = side.seats[i], age = sd.age;
   if (!sd.alive) return `<div class="seat" style="--team:${c.base}"><div class="head"><b style="color:${c.hi}">${c.name}</b><span class="qtxt">Fortress fallen. Your troops fight on.</span></div></div>`;
-  const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${ROLE_HINT[r]}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
+  const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${ROLE_HINT[r]}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div><div class="upQ"></div>
     <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}">${svgi(k)}<b>${UPG[k].label}</b><span>${UPG[k].desc}</span><span class="lv"></span><small></small></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
-    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('repair','Emergency repair, once per battle',svgi('repair'))}${a('age','Advance to the next age',svgi('age'))}</div>
+    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c, sd.civ)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('repair','Emergency repair, once per battle',svgi('repair'))}${a('age','Advance to the next age',svgi('age'))}</div>
   </div>`;
 }
 function buildTrays(){
@@ -2814,7 +2930,7 @@ function hostSnap(){
   sendAll({t:'snap', st:S.t, ot:!!S.overtime, over:S.over, shake:S.shake,
     sides:S.sides.map(side => side.seats.map(sd => ({kind:sd.kind, gold:sd.gold, q:sd.q, qt:sd.qt, def:sd.def, up:sd.up, res:sd.res, bar:sd.bar,
       hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, age:sd.age, xp:sd.xp, rank:sd.rank || 0, repaired:!!sd.repaired}))),
-    units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0]),
+    units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0, u.civ || 0]),
     shots:fresh(S.shots), fx:fresh(S.fx), msgs:fresh(S.msgs), snd:NET.sounds.splice(0)});
 }
 
@@ -2884,7 +3000,7 @@ function applySnap(m){
   const prev = new Map(S.units.map(u => [u.id, u]));
   S.units = m.units.map(a => { const p = prev.get(a[0]);
     return {id:a[0], side:a[1], seat:a[2], role:a[3], age:a[4], x0: p ? p.x : a[5], x1:a[5], x: p ? p.x : a[5], z:a[6], hp:a[7], max:a[8],
-      lunge: a[9] ? .2 : (p ? p.lunge : 0), col:a[10], hit: a[11] ? .12 : 0, step: p ? p.step : Math.random()*6}; });
+      lunge: a[9] ? .2 : (p ? p.lunge : 0), col:a[10], hit: a[11] ? .12 : 0, civ:a[12], step: p ? p.step : Math.random()*6}; });
   for (const sh of m.shots) S.shots.push(sh);
   for (const f of m.fx) S.fx.push(f);
   for (const msg of m.msgs){ S.msgs.push(msg); if (S.msgs.length > 3) S.msgs.shift(); }
