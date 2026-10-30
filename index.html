@@ -100,8 +100,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upCard small{grid-area:1/2;font-size:11.5px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums;justify-self:end}
 .upCard .lv{grid-area:3/1/4/-1;font-size:10.5px;color:var(--gold);font-weight:600}
 .upCard .desc{display:none}
+.upCard small{white-space:nowrap}
 /* the large view: wide cards that spell out what each upgrade does */
 .upBig .upPanel{width:min(620px,64vw)}
+.upBig.sharedUp .upPanel{width:auto}
 .upBig .upGrid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:5px}
 .upBig .upCard{grid-template-columns:24px 1fr auto;grid-template-rows:auto auto auto;gap:1px 6px;padding:5px 7px}
 .upBig .upCard svg{grid-area:1/1/4/2;width:22px;height:22px;align-self:start}
@@ -112,16 +114,17 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upBig .upQ{font-size:13px}
 .upCard:hover{border-color:var(--gold)}
 /* compact: one bar above the troop buttons with every upgrade in a row (two rows on narrower screens); slides sideways if it still doesn't fit */
-body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow:hidden;touch-action:auto}
+body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow:hidden;touch-action:auto;grid-template-columns:minmax(0,1fr)}
 body:not(.upBig) .upHead{flex-wrap:nowrap}
 body:not(.upBig) .upHead > span{font-size:13px}
 body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--n),minmax(50px,1fr));gap:3px;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin}
 body:not(.upBig) .upCard{touch-action:pan-x}
 @media (max-width:1259px){ body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--h),minmax(50px,1fr))} }
+body.sharedUp:not(.upBig) .upGrid{grid-template-columns:repeat(var(--h),minmax(50px,1fr))}
 /* phones held sideways: a single row that slides, to keep the bar as short as possible */
 @media (max-height:500px){
-  body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--n),54px)}
+  body:not(.upBig) .upGrid,body.sharedUp:not(.upBig) .upGrid{grid-template-columns:repeat(var(--n),54px)}
   body:not(.upBig) .upCard{padding:2px 3px;grid-template-rows:15px auto auto}
   body:not(.upBig) .upCard svg{width:14px;height:14px}
   body:not(.upBig) .upCard b{font-size:9.5px}
@@ -130,7 +133,6 @@ body:not(.upBig) .upCard{touch-action:pan-x}
   body:not(.upBig) .upHead > span{font-size:12px}
   body:not(.upBig) .upHead .upQ{font-size:11px}
   .upHead button{width:22px;height:22px}
-}
 }
 .upCard.off{filter:grayscale(.7) brightness(.6)}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
@@ -1900,6 +1902,8 @@ $('#app').addEventListener('wheel', e => {
   if (!S || S.mode === 'demo' || e.target.closest('.overlay, #chatBox')) return;
   const pan = e.target.closest('.upPanel');
   if (pan && Math.abs(e.deltaY) >= Math.abs(e.deltaX) && (e.deltaY > 0 ? pan.scrollTop + pan.clientHeight < pan.scrollHeight - 1 : pan.scrollTop > 0)) return;
+  const grid = pan && pan.querySelector('.upGrid'), gd = e.deltaX || e.deltaY;
+  if (grid && grid.scrollWidth > grid.clientWidth + 1 && (gd > 0 ? grid.scrollLeft + grid.clientWidth < grid.scrollWidth - 1 : grid.scrollLeft > 0)){ e.preventDefault(); grid.scrollLeft += gd; return; }
   const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY, px = dd * (e.deltaMode === 1 ? 30 : e.deltaMode === 2 ? cw : 1);
   e.preventDefault(); cam.x += px*1.2/ppw; clampCam(); cam.manual = 4;
 }, {passive:false});
@@ -2812,17 +2816,21 @@ function placePanel(panel, s, i){
   const left = (s === 0) !== (mates.length > 1 && mates.indexOf(i) > 0);
   const tr = $('#trays').getBoundingClientRect(), top = Math.max($('#topbar').getBoundingClientRect().bottom, hudBottom) + 6;
   const L = 'max(8px, env(safe-area-inset-left, 0px))', R = 'max(8px, env(safe-area-inset-right, 0px))', st = panel.style;
+  // with more than one player on this screen, each panel spans exactly its own controls so panels never overlap
+  const shared = [0, 1].reduce((n, t) => n + S.sides[t].seats.filter((sd, j) => localSeat(t, j)).length, 0) > 1;
+  const seat = panel.parentElement.getBoundingClientRect();
+  document.body.classList.toggle('sharedUp', shared);
   if (OPT.upBig){
     st.top = top + 'px'; st.bottom = 'auto'; st.maxHeight = Math.max(120, tr.top + 14 - top) + 'px';
-    st.left = left ? L : 'auto'; st.right = left ? 'auto' : R;
+    if (shared){ st.left = seat.left + 'px'; st.right = (innerWidth - seat.right) + 'px'; }
+    else { st.left = left ? L : 'auto'; st.right = left ? 'auto' : R; }
   } else {
-    const shared = [0, 1].reduce((n, t) => n + S.sides[t].seats.filter((sd, j) => localSeat(t, j)).length, 0) > 1;
     const head = panel.parentElement.querySelector('.head').getBoundingClientRect();
     // phones held sideways have so little field that troops walk right above the controls, so there the bar hangs under the top bar, over the sky
     if (matchMedia('(max-height: 500px)').matches){ st.top = top + 'px'; st.bottom = 'auto'; }
     else { st.top = 'auto'; st.bottom = (innerHeight - head.top + 2) + 'px'; }
     st.maxHeight = (head.top - top) + 'px';
-    st.left = shared && !left ? 'calc(50% + 4px)' : L; st.right = shared && left ? 'calc(50% + 4px)' : R;
+    if (shared){ st.left = seat.left + 'px'; st.right = (innerWidth - seat.right) + 'px'; } else { st.left = L; st.right = R; }
   }
 }
 addEventListener('resize', () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }));
@@ -2908,7 +2916,7 @@ const panelScroll = pan => pan.scrollTop + pan.querySelector('.upGrid').scrollLe
 const panelKey = el => { const b = el && el.closest('.upCard, [data-close]'); return b ? (b.dataset.up || 'close') + b.dataset.s + b.dataset.i : null; };
 app.addEventListener('pointerdown', e => {
   const pan = e.target.closest('.upPanel');
-  if (pan){ panelDown[e.pointerId] = {key: panelKey(e.target), x:e.clientX, y:e.clientY, st:panelScroll(pan)}; return; }
+  if (pan){ if (e.pointerType === 'mouse' && e.button !== 0) return; panelDown[e.pointerId] = {key: panelKey(e.target), x:e.clientX, y:e.clientY, st:panelScroll(pan)}; return; }
   if (e.target.closest('.tray') && press(e)) e.preventDefault();
 });
 app.addEventListener('pointerup', e => {
@@ -2936,6 +2944,7 @@ async function keepAwake(){ try { if (navigator.wakeLock && !wake){ wake = await
 const randomMap = () => MAPS[Math.floor(Math.random()*MAPS.length)];
 const pickMap = () => mapPick === 'random' ? randomMap() : mapPick;
 function startDemo(){
+  homeOpts(); $('#pauseOv').hidden = true;
   const fromBattle = $('#menu').hidden;   // only jump back to the title screen when coming out of a battle
   newGame('demo', [['cpu'],['cpu']], mapPick === 'random' ? randomMap() : mapPick, colors, true); paused = false;
   const age = Math.floor(Math.random()*AGES.length);
@@ -2962,7 +2971,7 @@ function startBattle(){
 }
 function togglePause(on){
   if (!S || S.mode === 'demo' || S.over >= 0) return;
-  paused = on; $('#pauseOv').hidden = !on; if (on){ $('#pauseOpts').appendChild($('#optGrid')); setToggles(); tiltNote(); } A.mode = on ? 'quiet' : 'battle'; setAmbience();
+  paused = on; $('#pauseOv').hidden = !on; if (on){ $('#pauseOpts').appendChild($('#optGrid')); setToggles(); tiltNote(); } else homeOpts(); A.mode = on ? 'quiet' : 'battle'; setAmbience();
 }
 function endGame(winner){
   S.over = winner;
@@ -3230,7 +3239,9 @@ $('#leaveBtn').addEventListener('click', () => { leaveNet(); if (S && S.mode !==
 
 /* =================== main menu screens and options =================== */
 let OPT = Object.assign({shake:true, follow:true, gfx:'high'}, store.get('opts', {}));
-function showScreen(name){ if (name === 'options') $('[data-screen=options] .scrHead').after($('#optGrid'));   // the settings may have been lent to the pause screen
+// the settings grid is lent to the pause screen during a battle; this puts it back on the Options screen
+function homeOpts(){ const h = $('[data-screen=options] .scrHead'); if (h.nextElementSibling !== $('#optGrid')) h.after($('#optGrid')); }
+function showScreen(name){ homeOpts();
   document.querySelectorAll('#menu .screen').forEach(el => el.hidden = el.dataset.screen !== name); $('#menu').scrollTop = 0; if (name === 'setup') previewMap(); }
 // battlefield preview: the battle behind the menu switches to the chosen map, and a window in the setup screen shows it
 const MAP_NAMES = {coast:'Desert coast', sunset:'Aqueduct', valley:'Green valley', winter:'Winter pass', canyon:'Canyon', jungle:'Jungle'};
@@ -3255,7 +3266,7 @@ $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
 $('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
 $('#tiltT').addEventListener('click', () => setTilt(!OPT.tilt));
-$('#cycleT').addEventListener('click', () => { cyclePick = !cyclePick; store.set('cycle', cyclePick); if (S && S.mode === 'battle' && NET.role !== 'client') S.cycle = cyclePick; setToggles(); });
+$('#cycleT').addEventListener('click', () => { cyclePick = !cyclePick; store.set('cycle', cyclePick); if (S && S.mode === 'battle') S.cycle = cyclePick; setToggles(); });   // day and night only changes the look, so each phone can choose
 $('#upSizeT').addEventListener('click', () => { flipOpt('upBig', !OPT.upBig); openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }); });
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
 
@@ -3321,7 +3332,7 @@ function boot(data){
   if (data && data.S && data.S.v === 8 && data.S.mode === 'battle' && data.S.over < 0){
     applyColors(data.S.cols); L = 2000 + FORT*(data.S.lineup[0].length + data.S.lineup[1].length);
     S = data.S; buildTrays(); layout(); document.body.classList.add('battle');
-    $('#menu').hidden = true; paused = true; $('#pauseOv').hidden = false; A.mode = 'quiet';
+    $('#menu').hidden = true; togglePause(true);
   } else startDemo();
   setTimeout(buildGuide, 50);
   requestAnimationFrame(t => { last = t; frame(t); });
