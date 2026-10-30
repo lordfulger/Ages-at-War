@@ -196,7 +196,7 @@ details[open].card summary::after{content:" −"}
 .age{display:grid;gap:4px}
 .age b{font:900 13px/1.1 var(--display);color:var(--gold)}
 .age .row{display:flex;gap:2px}
-.age img{width:14%;aspect-ratio:1;object-fit:contain;background:rgba(255,255,255,.04);border-radius:4px}
+.age img{flex:1 1 0;min-width:0;width:auto;aspect-ratio:1;object-fit:contain;background:rgba(255,255,255,.04);border-radius:4px}
 .guide{display:grid;grid-template-columns:28px 1fr;gap:6px 10px;align-items:center;font-size:16px;line-height:1.25}
 .guide svg{width:24px;height:24px;margin:auto;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .guide span{color:var(--muted)}
@@ -319,7 +319,7 @@ details[open].card summary::after{content:" −"}
           <div class="guide" id="guide"></div>
           <p class="note">Tap a troop to pay for it and add it to your training line. Fighting earns experience; when the hourglass glows, tap it to enter the next age with stronger troops and a new fortress. Kills pay back 20% of a troop's cost. Drag the battlefield or tap the map at the top to look around.</p>
           <p class="note">The star button opens your upgrades. Each new age raises how far every upgrade can go and unlocks new ones, twenty-three in all. You can line up three at a time. With more commanders on one side, that side earns more gold in total, so 1 vs 2 or 1 vs 3 is a real underdog fight.</p>
-          <p class="note">On a computer: 1–7 train troops, X cancel, Q defender, W barrage, E upgrades, R emergency repair, A advance age.</p>
+          <p class="note">On a computer: 1–8 train troops, X cancel, Q defender, W barrage, E upgrades, R emergency repair, A advance age.</p>
         </div>
         <div class="card"><div class="label">The ten ages</div><div class="ages" id="agesList"></div></div>
       </section>
@@ -1535,7 +1535,7 @@ function spawn(s, i, it){
   const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' || role === 'shield' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
   const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp');
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
-    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * CV(sd, 'dmg'), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
+    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * (st.dmg > 0 ? CV(sd, 'dmg') : 1), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
     civ:sd.civ || 0, rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
@@ -1659,7 +1659,7 @@ function aiThink(s, i){
     if (own.inf + own.heavy + own.pike < 2) pick = me.gold >= STATS[age].heavy.cost*1.3 && Math.random() < .35 ? 'heavy' : 'inf';
     else if (turtle && own.siege < (D.waves ? 3 : 2)) pick = 'siege';
     else if (total >= 6 && own.support < Math.floor(total/6)) pick = 'support';
-    else if (total >= 4 && own.rng + own.siege >= 2 && own.shield < Math.floor(total/5)) pick = 'shield';
+    else if (own.rng + own.siege >= 2 && own.shield < Math.floor(total/5)) pick = 'shield';
     else if (!foes.length) pick = own.siege < 1 && Math.random() < .3 ? 'siege' : fighters[Math.floor(Math.random()*fighters.length)];
     else {
       // the troop whose matchups against what the enemy is fielding are best, with a little variety
@@ -1748,7 +1748,7 @@ function update(dt){
         if (best){ u.atk = st.rate; u.lunge = .25; best.healedAt = S.t; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
       }
       const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 40);
-      let lead = null; for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && (!lead || (f.x - lead.x)*d > 0)) lead = f;
+      let lead = null; for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && !statOf(f).guard && (!lead || (f.x - lead.x)*d > 0)) lead = f;
       const hold = threat || (lead ? (u.x - lead.x)*d > -20 : Math.abs(u.x - front(u.side)) > 120);   // keep close behind the front, within reach of enemy fire
       if (!hold){ u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
       continue;
@@ -2640,7 +2640,9 @@ function drawHUD(){
   let y = fh*.3;
   for (const m of S.msgs){
     const a = Math.min(1, m.t*4, (m.dur - m.t)*2), sz = Math.max(16, Math.min(34, fh*.09));
-    ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.font = `900 ${sz}px Cinzel, serif`;
+    ctx.font = `900 ${sz}px Cinzel, serif`; const fit = Math.min(1, (cw - 24)/ctx.measureText(m.txt).width);
+    if (fit < 1) ctx.font = `900 ${Math.floor(sz*fit)}px Cinzel, serif`;
+    ctx.globalAlpha = a; ctx.textAlign = 'center';
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,10,4,.75)'; ctx.strokeText(m.txt, cw/2, y); ctx.fillStyle = m.col; ctx.fillText(m.txt, cw/2, y);
     ctx.globalAlpha = 1; y += sz*1.15;
   }
@@ -2869,8 +2871,21 @@ function press(e){
 }
 const app = $('#app');
 // buttons react on touch for speed, but the upgrades list waits for a tap so a swipe can scroll it
-app.addEventListener('pointerdown', e => { if (e.target.closest('.tray') && !e.target.closest('.upPanel') && press(e)) e.preventDefault(); });
-app.addEventListener('click', e => { if (e.target.closest('.tray') && (e.detail === 0 || e.target.closest('.upPanel'))) press(e); });
+// a second finger never gets a click, so the panel acts on a pointerup that didn't move or scroll the list
+const panelDown = {};
+const panelKey = el => { const b = el && el.closest('.upCard, [data-close]'); return b ? (b.dataset.up || 'close') + b.dataset.s + b.dataset.i : null; };
+app.addEventListener('pointerdown', e => {
+  const pan = e.target.closest('.upPanel');
+  if (pan){ panelDown[e.pointerId] = {key: panelKey(e.target), x:e.clientX, y:e.clientY, st:pan.scrollTop}; return; }
+  if (e.target.closest('.tray') && press(e)) e.preventDefault();
+});
+app.addEventListener('pointerup', e => {
+  const d = panelDown[e.pointerId]; delete panelDown[e.pointerId]; if (!d || !d.key) return;
+  const hit = document.elementFromPoint(e.clientX, e.clientY), pan = hit && hit.closest('.upPanel');
+  if (pan && panelKey(hit) === d.key && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 10 && Math.abs(pan.scrollTop - d.st) < 4) press({target: hit});
+});
+app.addEventListener('pointercancel', e => { delete panelDown[e.pointerId]; });
+app.addEventListener('click', e => { if (e.detail === 0 && e.target.closest('.tray')) press(e); });   // keyboard activation
 document.addEventListener('keydown', e => {
   if (e.target && e.target.closest && e.target.closest('input')) return;   // typing a chat message or room code
   if (!S || S.mode === 'demo' || S.over >= 0) return;
@@ -2910,7 +2925,7 @@ function startBattle(){
   $('#menu').hidden = true; $('#pauseOv').hidden = true; $('#endOv').hidden = true;
   A.mode = 'battle'; setAmbience(); keepAwake();
   say('Stone Age · train your first warriors');
-  S.sides.forEach((side, s) => side.seats.forEach((sd, i) => { if (sd.kind === 'human' && sd.civ) say(`${seatName(s, i)}: ${CIVS[sd.civ].name}. ${CIVS[sd.civ].desc}`, s, i); }));
+  S.sides.forEach((side, s) => { const named = side.seats.map((sd, i) => sd.kind === 'human' && sd.civ ? `${seatName(s, i)}: ${CIVS[sd.civ].name}` : '').filter(Boolean); if (named.length) say(named.join(' · '), s, 0); });
   netStart();
 }
 function togglePause(on){
