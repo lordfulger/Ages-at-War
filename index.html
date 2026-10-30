@@ -58,6 +58,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .qbar{flex:0 0 22%;height:6px;border-radius:3px;background:rgba(0,0,0,.45);overflow:hidden;box-shadow:0 0 0 1px rgba(246,234,210,.25)}
 .qbar i{display:block;height:100%;background:#3fbf55;transform-origin:left;transform:scaleX(var(--p,0))}
 .units,.extras{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+.units{grid-template-columns:repeat(9,1fr)}
 .btn{position:relative;overflow:hidden;border:1.5px solid var(--edge);border-bottom:3px solid var(--team);
   background:linear-gradient(var(--btn-a),var(--btn-b));box-shadow:inset 0 1px 0 rgba(255,220,150,.25),0 2px 5px rgba(0,0,0,.55);
   border-radius:10px;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
@@ -75,7 +76,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .btn.arm{background:linear-gradient(#8a2c1a,#3d140c);box-shadow:0 0 0 2px #ff6a4a,0 0 14px rgba(255,90,60,.75)}
 .btn.arm small{color:#fff}
 .btn:active:not(.off){filter:brightness(1.25)}
-.duo .units{grid-template-columns:repeat(4,1fr)}
+.duo .units{grid-template-columns:repeat(5,1fr)}
 .duo .btn.unit{height:clamp(40px,11vh,60px)}
 .duo .qbar{display:none}
 
@@ -297,6 +298,7 @@ details[open].card summary::after{content:" −"}
           <button class="toggle" id="shakeT" aria-pressed="true">Screen shake <i>On</i></button>
           <button class="toggle" id="followT" aria-pressed="true">Camera follows battle <i>On</i></button>
           <button class="toggle" id="gfxT" aria-pressed="true">Graphics <i>High</i></button>
+          <button class="toggle" id="tiltT" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
         </div>
         <p class="note">Low graphics turns off weather and lighting effects and draws at a lower resolution, which helps older phones. On iPhone, if you hear nothing, check the ring/silent switch.</p>
       </section>
@@ -322,6 +324,7 @@ details[open].card summary::after{content:" −"}
         <button class="toggle" id="musicT2" aria-pressed="true">Music <i>On</i></button>
         <button class="toggle" id="sfxT2" aria-pressed="true">Effects <i>On</i></button>
       </div>
+      <button class="toggle" id="tiltT2" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
       <button class="cta ghost" id="quitBtn">Quit to menu</button>
     </div>
   </div>
@@ -346,8 +349,8 @@ const $ = s => document.querySelector(s);
 let L = 2400;   // grows with the number of fortresses
 const FORT = 200, BASE_HP = 9000, DEF_RANGE = 340;
 const dirOf = s => s === 0 ? 1 : -1;
-const ROLES = ['inf','rng','fast','heavy','siege','pike','support'];
-const ROLE_UI = ['inf','pike','rng','fast','heavy','siege','support'];   // order on the buttons
+const ROLES = ['inf','rng','fast','heavy','siege','pike','support','shield'];
+const ROLE_UI = ['inf','shield','pike','rng','fast','heavy','siege','support'];   // order on the buttons
 const ROLE = {
   inf:  {cost:40,  hp:85,  dmg:12, rate:.8,  range:26,  speed:55, train:1.4, r:14},
   rng:  {cost:60,  hp:60,  dmg:16, rate:1.2, range:210, speed:48, train:2,   r:14},
@@ -355,19 +358,21 @@ const ROLE = {
   heavy:{cost:250, hp:620, dmg:38, rate:1.4, range:38,  speed:38, train:6,   r:34, trample:50},
   siege:{cost:220, hp:120, dmg:50, rate:3.6, range:400, speed:28, train:6.5, r:28, splash:50, siege:2.2, minRange:140},
   pike: {cost:55,  hp:120, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
-  support:{cost:65, hp:95, dmg:0,  rate:.9,  range:0,   speed:46, train:2.2, r:14, healer:20, healGap:1.2}
+  support:{cost:65, hp:95, dmg:0,  rate:.9,  range:0,   speed:46, train:2.2, r:14, healer:20, healGap:1.2},
+  shield:{cost:75,  hp:260, dmg:0,  rate:1,   range:0,   speed:60, train:2.4, r:15, guard:1}
 };
 // who beats whom: pikes stop riders and heavies, ranged troops shoot down pikes and fighters, riders run down
-// ranged troops, siege and healers, heavies trample fighters, and fighters overrun siege engines
+// ranged troops, siege and healers, heavies trample fighters, and fighters overrun siege engines;
+// shields shrug off arrows and bullets but heavies and siege break them
 const BONUS = {
   inf:  {siege:1.8, support:1.6, rng:1.2, heavy:.7, fast:.9},
-  rng:  {inf:1.5, pike:1.7, support:1.3, fast:.7},
-  fast: {rng:1.8, siege:2, support:1.6, pike:.55, inf:1.2},
-  pike: {fast:2, heavy:2.4, inf:.8},
-  heavy:{inf:1.6, rng:1.3, support:1.5, pike:.6},
-  siege:{heavy:1.3, inf:.6, rng:.6, fast:.45, pike:.6, support:.6, siege:.8}
+  rng:  {inf:1.5, pike:1.7, support:1.3, fast:.7, shield:.45},
+  fast: {rng:1.8, siege:2, support:1.6, pike:.55, inf:1.2, shield:.7},
+  pike: {fast:2, heavy:2.4, inf:.8, shield:.8},
+  heavy:{inf:1.6, rng:1.3, support:1.5, pike:.6, shield:1.5},
+  siege:{heavy:1.3, inf:.6, rng:.6, fast:.45, pike:.6, support:.6, siege:.8, shield:1.3}
 };
-const ROLE_HINT = {inf:'all-round fighters, beat siege and healers, weak to heavies', pike:'beat fast and heavy troops, weak to ranged', rng:'attack from range, beat fighters and pikes, weak to riders', fast:'quick raiders, beat ranged, siege and healers, weak to pikes', heavy:'very tough, trample fighters, weak to pikes', siege:'long range and wrecks forts, but helpless up close', support:'heals nearby troops and never attacks'};
+const ROLE_HINT = {inf:'all-round fighters, beat siege and healers, weak to heavies', pike:'beat fast and heavy troops, weak to ranged', rng:'attack from range, beat fighters and pikes, weak to riders', fast:'quick raiders, beat ranged, siege and healers, weak to pikes', heavy:'very tough, trample fighters, weak to pikes', siege:'long range and wrecks forts, but helpless up close', support:'heals nearby troops and never attacks', shield:'never attacks, marches to the very front and soaks up hits; shrugs off ranged fire, weak to heavies and siege'};
 const AGES = [
   {name:'Stone Age',   gear:['hair','fur'],        fort:'cave',    units:[
     ['Clubman',{f:'p',w:'club'}], ['Rock Thrower',{f:'p',w:'rock'},'rock'], ['Wolf Rider',{f:'m',m:'wolf',w:'club'}], ['Mammoth',{f:'m',m:'mammoth',w:'spear'}], ['Boulder Sling',{f:'s',s:'lever'},'boulder']]},
@@ -403,6 +408,9 @@ const AGES = [
   [['Missile Team',{f:'p',w:'launcher'}], ['Combat Medic',{f:'p',w:'kit'}]],
   [['Pulse Lancer',{f:'p',w:'launcher'}], ['Nanomedic',{f:'p',w:'kit'}]]
 ].forEach((extra, k) => AGES[k].units.push(...extra));
+// shield bearers: no weapon, just a wall for the troops behind them
+['Hide Bearer','Wicker Guard','Scutum Guard','Tower Shield','Pavisier','Mantlet Guard','Steel Shield','Trench Shield','Riot Trooper','Aegis Trooper']
+  .forEach((n, k) => AGES[k].units.push([n, {f:'p', w:'tshield'}]));
 AGES[4].units[0] = ['Rodelero',{f:'p',w:'sword'}];   // the Renaissance pikeman now has his own slot
 const POW = a => Math.pow(1.35, a), PRICE = a => Math.pow(1.3, a);
 const XP_NEED = a => Math.round(900 * Math.pow(1.33, a));
@@ -432,7 +440,7 @@ const UPG = {
   garrison:   {label:'Garrison',       base:260, t0:14, age:3, max0:1, per:.5,  cap:4,  desc:'Room for one more wall defender per level'},
   gate:       {label:'Iron Gate',      base:240, t0:12, age:4, max0:1, per:1,   cap:8,  desc:'Your fortress takes 5% less damage per level'},
   barrage:    {label:'Bombardment',    base:200, t0:10, age:0, max0:1, per:1,   cap:10, desc:'Barrages hit harder and recharge faster'},
-  formation:  {label:'Formation',      base:160, t0:10, age:1, max0:2, per:1.5, cap:12, desc:'Fighters and heavies 6% tougher per level'},
+  formation:  {label:'Formation',      base:160, t0:10, age:1, max0:2, per:1.5, cap:12, desc:'Fighters, shields and heavies 6% tougher per level'},
   ballistics: {label:'Ballistics',     base:160, t0:10, age:1, max0:2, per:1.5, cap:12, desc:'Ranged troops hit 6% harder per level'},
   mounts:     {label:'Mounts',         base:180, t0:10, age:2, max0:2, per:1.5, cap:10, desc:'Fast troops 6% quicker and tougher per level'},
   engineering:{label:'Engineering',    base:220, t0:12, age:3, max0:2, per:1.5, cap:10, desc:'Siege hits fortresses 5% harder per level'},
@@ -756,6 +764,7 @@ function setToggles(){
     set('cycleT', cyclePick ? 'On' : 'Off', cyclePick);
     set('ambT', LEVEL_NAME[A.ambLv], A.ambLv > 0);
     set('shakeT', OPT.shake ? 'On' : 'Off', OPT.shake); set('followT', OPT.follow ? 'On' : 'Off', OPT.follow); set('gfxT', OPT.gfx === 'high' ? 'High' : 'Low', OPT.gfx === 'high');
+    for (const id of ['tiltT', 'tiltT2']){ set(id, OPT.tilt ? 'On' : 'Off', !!OPT.tilt); const b = document.getElementById(id); if (b) b.hidden = !tiltOK(); }
   }
 }
 
@@ -985,7 +994,42 @@ function weapon(c, o, arm){
       hand(4,-16); rrect(c, 1.5,-18.5, 7.5, 6, 1.2, o.col);
       line(c, 5.25,-17.4, 5.25,-13.6, '#ffffff', 1.1); line(c, 3.3,-15.5, 7.2,-15.5, '#ffffff', 1.1);
       break;
+    case 'tshield': towerShield(c, o, hand); break;
     default: hand(3,-15);
+  }
+}
+// a big shield held up in front, made of whatever each age has to hand
+function towerShield(c, o, hand){
+  const a = o.age, x = 4.2, top = -29, bot = -5, w = 6.4;
+  hand(x + 1, -18);
+  switch (a){
+    case 0:   // hide stretched on a frame of sticks
+      rrect(c, x, top + 1, w, bot - top - 1, 2.4, '#a0703c', .8); line(c, x + .6, top + 2, x + w - .6, bot - 1, WOOD2, .9); line(c, x + w - .6, top + 2, x + .6, bot - 1, WOOD2, .9);
+      for (const yy of [top + 3, bot - 3]) line(c, x + 1, yy, x + w - 1, yy, '#6b4424', .5); break;
+    case 1:   // woven wicker
+      ell(c, x + w/2, (top + bot)/2, w/2 + .4, (bot - top)/2, '#c9a35c', 0, .8);
+      for (let yy = top + 3; yy < bot - 1; yy += 2.2) line(c, x + 1, yy, x + w - 1, yy, '#9a7a3a', .5); circ(c, x + w/2, (top + bot)/2, 1.3, BRONZE, .5); break;
+    case 2:   // curved scutum with a boss
+      rrect(c, x, top, w, bot - top, 1.6, vgrad(c, top, bot, shade(o.col, .2), shade(o.col, -.25)), .8);
+      line(c, x + w/2, top + 1.5, x + w/2, bot - 1.5, '#e8c25a', .7); line(c, x + 1, (top + bot)/2, x + w - 1, (top + bot)/2, '#e8c25a', .7); circ(c, x + w/2, (top + bot)/2, 1.5, BRONZE, .5); break;
+    case 3:   // kite shield with a steel rim
+      c.beginPath(); c.moveTo(x, top + 2); c.quadraticCurveTo(x + w/2, top - 1.5, x + w, top + 2); c.lineTo(x + w, top + 13); c.quadraticCurveTo(x + w*.7, bot - 2, x + w/2, bot); c.quadraticCurveTo(x + w*.3, bot - 2, x, top + 13); c.closePath();
+      fs(c, o.col, 1.3); c.strokeStyle = STEEL; c.lineWidth = .6; c.stroke(); line(c, x + w/2, top + 2, x + w/2, bot - 3, '#f1d36a', .8); break;
+    case 4:   // painted wooden pavise
+      rrect(c, x, top - 1, w, bot - top + 1, .8, '#9a6a38', .8); rect(c, x + w*.3, top - 1, w*.4, bot - top + 1, o.col, .4); circ(c, x + w/2, top + 6, 1.2, '#e8c25a', .4); break;
+    case 5:   // iron-banded planks
+      rect(c, x, top, w, bot - top, vgrad(c, top, bot, '#8a6038', '#5e3e22'), .8);
+      for (const yy of [top + 3, (top + bot)/2, bot - 3]) line(c, x, yy, x + w, yy, IRON, 1.1); rect(c, x + 1, top + 5.5, w - 2, 1.4, o.col, .3); break;
+    case 6: case 7:   // steel plate with a vision slit
+      rrect(c, x, top, w, bot - top, a === 6 ? 1 : .4, vgrad(c, top, bot, '#9da2a8', '#5f646b'), .9);
+      rect(c, x + 1.2, top + 4, w - 2.4, 1, '#1d1d1d', 0); for (const yy of [top + 1.5, bot - 1.5]) for (const xx of [x + 1, x + w - 1]) circ(c, xx, yy, .45, '#3a3d42', 0);
+      if (a === 7) rect(c, x + .6, bot - 6, w - 1.2, 1.3, o.col, .3); break;
+    case 8:   // clear riot shield
+      rrect(c, x, top, w, bot - top, 1.2, 'rgba(190,225,245,.55)', .9); rect(c, x + .8, top + 6, w - 1.6, 1.6, o.col, 0); line(c, x + 1.2, top + 2, x + 1.2, bot - 2, 'rgba(255,255,255,.7)', .6); break;
+    default: {   // energy barrier
+      const g = c.createLinearGradient(x, 0, x + w + 2, 0); g.addColorStop(0, o.hi + 'cc'); g.addColorStop(1, o.hi + '22');
+      c.fillStyle = g; c.beginPath(); c.ellipse(x + w/2, (top + bot)/2, w/2 + 1.2, (bot - top)/2 + 1, 0, 0, Math.PI*2); c.fill();
+      c.strokeStyle = '#ffffff'; c.lineWidth = .7; c.stroke(); rrect(c, x - 1, -20, 2.4, 4, .6, '#eef2f6', .5); }
   }
 }
 function rider(c, o, x, backY, w){
@@ -1477,7 +1521,7 @@ function barrage(s, i){
 function spawn(s, i, it){
   const st = STATS[it.a][it.r], sd = S.sides[s].seats[i], n = S.sides[s].seats.length;
   const U = sd.up, role = it.r;
-  const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
+  const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' || role === 'shield' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
   const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp');
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
     atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * CV(sd, 'dmg'), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
@@ -1599,11 +1643,12 @@ function aiThink(s, i){
   if (Math.random() < D.smart){
     const c = Object.fromEntries(ROLES.map(r => [r, 0]));
     (near.length ? near : foes).forEach(u => c[u.role] += statOf(u).cost);
-    const fighters = ROLES.filter(r => r !== 'support' && r !== 'siege');
+    const fighters = ROLES.filter(r => r !== 'support' && r !== 'siege' && r !== 'shield');
     const total = Object.values(own).reduce((x, y) => x + y, 0);
     if (own.inf + own.heavy + own.pike < 2) pick = me.gold >= STATS[age].heavy.cost*1.3 && Math.random() < .35 ? 'heavy' : 'inf';
     else if (turtle && own.siege < (D.waves ? 3 : 2)) pick = 'siege';
     else if (total >= 6 && own.support < Math.floor(total/6)) pick = 'support';
+    else if (total >= 4 && own.rng + own.siege >= 2 && own.shield < Math.floor(total/5)) pick = 'shield';
     else if (!foes.length) pick = own.siege < 1 && Math.random() < .3 ? 'siege' : fighters[Math.floor(Math.random()*fighters.length)];
     else {
       // the troop whose matchups against what the enemy is fielding are best, with a little variety
@@ -1695,6 +1740,11 @@ function update(dt){
       let lead = null; for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && (!lead || (f.x - lead.x)*d > 0)) lead = f;
       const hold = threat || (lead ? (u.x - lead.x)*d > -20 : Math.abs(u.x - front(u.side)) > 120);   // keep close behind the front, within reach of enemy fire
       if (!hold){ u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
+      continue;
+    }
+    if (st.guard){   // shields push to the front of the line and stop at the first enemy, taking the blows meant for the troops behind
+      const blocked = S.units.some(e => e.side !== u.side && !e.dead && (e.x - u.x)*d > -10 && Math.abs(e.x - u.x) < st.r + statOf(e).r + 4);
+      if (!blocked){ u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
       continue;
     }
     const tgt = findTarget(u);
@@ -1803,14 +1853,41 @@ function camTarget(){
   return (ax + bx)/2 - span/2;
 }
 function moveCam(dt){
+  tiltCam(dt);
   if (cam.manual > 0){ cam.manual -= dt; return; }
   if (!OPT.follow && S.mode !== 'demo') return;
   const t = camTarget(); cam.x += (t - cam.x) * Math.min(1, dt*1.4); clampCam();
 }
-cv.addEventListener('pointerdown', e => { if (!S || S.mode === 'demo') return; cam.drag = {x:e.clientX, cx:cam.x, id:e.pointerId}; cam.manual = 4; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (!S || S.mode === 'demo' || (e.pointerType === 'mouse' && e.button !== 0)) return; cam.drag = {x:e.clientX, cx:cam.x, id:e.pointerId}; cam.manual = 4; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => { if (!cam.drag || cam.drag.id !== e.pointerId) return; cam.x = cam.drag.cx - (e.clientX - cam.drag.x)/ppw; clampCam(); cam.manual = 4; });
 const endDrag = e => { if (cam.drag && cam.drag.id === e.pointerId) cam.drag = null; };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+// the mouse wheel (or a trackpad swipe) slides the battlefield sideways
+$('#app').addEventListener('wheel', e => {
+  if (!S || S.mode === 'demo' || e.target.closest('.upPanel, .overlay, #chatBox')) return;
+  const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY, px = dd * (e.deltaMode === 1 ? 30 : e.deltaMode === 2 ? cw : 1);
+  e.preventDefault(); cam.x += px*1.2/ppw; clampCam(); cam.manual = 4;
+}, {passive:false});
+// tilt to scroll: tip the phone like a steering wheel and the battlefield slides that way
+let tilt = 0;
+window.addEventListener('deviceorientation', e => {
+  if (e.beta == null || e.gamma == null) return;
+  const b = e.beta*Math.PI/180, g = e.gamma*Math.PI/180;
+  const ang = ((screen.orientation && screen.orientation.angle != null ? screen.orientation.angle : window.orientation) || 0)*Math.PI/180;
+  const ux = -Math.sin(g)*Math.cos(b), uy = Math.sin(b);   // which way is up, in the phone's own frame
+  tilt = -(ux*Math.cos(ang) - uy*Math.sin(ang));          // how far the screen's sideways axis leans from level
+});
+const tiltOK = () => typeof DeviceOrientationEvent !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+function askTilt(then){
+  const D = typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent;
+  if (D && typeof D.requestPermission === 'function') D.requestPermission().then(r => then(r === 'granted')).catch(() => then(false));
+  else then(true);
+}
+function tiltCam(dt){
+  if (!OPT.tilt || !S || S.mode !== 'battle' || paused || cam.drag) return;
+  const m = Math.abs(tilt); if (m < .09) return;
+  cam.x += Math.sign(tilt)*Math.min(1, (m - .09)/.33)*span*1.2*dt; clampCam(); cam.manual = Math.max(cam.manual, 1.5);
+}
 function miniJump(e){ const r = mini.getBoundingClientRect(); cam.x = (e.clientX - r.left)/r.width*L - span/2; clampCam(); cam.manual = 5; }
 mini.addEventListener('pointerdown', e => { mini.setPointerCapture(e.pointerId); mini._down = true; miniJump(e); });
 mini.addEventListener('pointermove', e => { if (mini._down) miniJump(e); });
@@ -2354,10 +2431,16 @@ function missile(kind, x, y, a, len, r, side){
   switch (kind){
     case 'rock': case 'boulder': case 'stone':
       ctx.fillStyle = kind === 'rock' ? '#9b9488' : '#b9ae98'; ctx.beginPath(); ctx.arc(x, y, kind === 'rock' ? r*.7 : r*1.4, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 1; ctx.stroke(); break;
-    case 'arrow': case 'javelin': case 'bolt': {
-      const l = len*(kind === 'javelin' ? 1.5 : 1);
-      ctx.strokeStyle = '#3b2a1d'; ctx.lineWidth = kind === 'bolt' ? 2 : 1.4;
-      ctx.beginPath(); ctx.moveTo(x - Math.cos(a)*l, y - Math.sin(a)*l); ctx.lineTo(x, y); ctx.stroke(); break; }
+    case 'arrow': case 'javelin': case 'bolt': {   // drawn like the ones the troops carry: a wooden shaft, a steel head, feathers on arrows and bolts
+      const u = len/16, jav = kind === 'javelin', l = (jav ? 24 : kind === 'bolt' ? 12 : 16)*u, wd = (jav ? 2 : kind === 'bolt' ? 1.9 : 1.3)*u;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.lineCap = 'round';
+      ctx.strokeStyle = OUT; ctx.lineWidth = wd + 1.6; ctx.beginPath(); ctx.moveTo(-l, 0); ctx.lineTo(0, 0); ctx.stroke();
+      ctx.strokeStyle = jav ? '#9a6a3a' : '#a8794a'; ctx.lineWidth = wd; ctx.stroke();
+      const hl = (jav ? 5 : 3.4)*u, hw = (jav ? 1.9 : 1.6)*u;
+      ctx.fillStyle = STEEL; ctx.strokeStyle = OUT; ctx.lineWidth = .9;
+      ctx.beginPath(); ctx.moveTo(hl, 0); ctx.lineTo(-.4*u, -hw); ctx.lineTo(-.4*u, hw); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if (!jav){ ctx.fillStyle = '#f2ead6'; for (const sg of [-1, 1]){ ctx.beginPath(); ctx.moveTo(-l + 4*u, 0); ctx.lineTo(-l - .5*u, sg*1.9*u); ctx.lineTo(-l + 1*u, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+      ctx.restore(); break; }
     case 'bullet':
       ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - Math.cos(a)*len*.8, y - Math.sin(a)*len*.8); ctx.lineTo(x, y); ctx.stroke(); break;
     case 'ball': case 'shell':
@@ -2725,7 +2808,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && NET.role){ chatOpen(true); e.preventDefault(); return; }
   if (e.key === 'Escape' || e.key === 'p'){ togglePause(!paused); return; }
   const seat = S.sides[0].seats.findIndex(sd => sd.kind === 'human' && sd.alive); if (seat < 0) return;
-  const k = e.key.toLowerCase(), n = '1234567'.indexOf(k), a = {q:'def', w:'barrage', e:'up', a:'age', x:'cancel', r:'repair'}[k];
+  const k = e.key.toLowerCase(), n = '12345678'.indexOf(k), a = {q:'def', w:'barrage', e:'up', a:'age', x:'cancel', r:'repair'}[k];
   if (n >= 0) act(0, seat, ROLE_UI[n]); else if (a) act(0, seat, null, a);
   else if (e.key === 'ArrowLeft'){ cam.x -= span*.25; cam.manual = 4; clampCam(); }
   else if (e.key === 'ArrowRight'){ cam.x += span*.25; cam.manual = 4; clampCam(); }
@@ -2805,6 +2888,7 @@ function buildGuide(){
     ['heavy', 'Heavy', 'Very tough. Tramples fighters; loses to pikes.'],
     ['siege', 'Siege', 'Long range and wrecks forts, but cannot hit anything close. Guard it.'],
     ['support', 'Healer', 'Heals the most hurt troops nearby and stays behind the front line.'],
+    ['shield', 'Shield', 'Never attacks. Marches to the very front and soaks up hits for the troops behind. Arrows and bullets barely hurt it; heavies and siege break it.'],
     ['@barrage', 'Barrage', 'Free bombardment that recharges. Rocks in the Stone Age, orbital strikes in the Future.'],
     ['@star', 'Upgrades', 'Twenty-three upgrades. Every age raises their level caps, and new ones unlock along the way. Each level takes longer to research; Scholars speed all research up.'],
     ['@armor', 'Civilizations', 'Pick one for each commander in setup. Each has a small strength paid for with a weakness.'],
@@ -3053,6 +3137,8 @@ const flipOpt = (k, v) => { OPT[k] = v; store.set('opts', OPT); setToggles(); };
 $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
 $('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
+for (const id of ['tiltT', 'tiltT2']) $('#' + id).addEventListener('click', () => { if (OPT.tilt) flipOpt('tilt', false); else askTilt(ok => { if (ok) flipOpt('tilt', true); }); });
+document.addEventListener('pointerdown', () => { if (OPT.tilt) askTilt(() => {}); }, {once:true});   // iPhones ask again after a reload
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
 
 /* =================== chat for online games =================== */
