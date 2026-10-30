@@ -111,22 +111,26 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upBig .upCard .lv{grid-area:3/2/4/4;font-size:11.5px}
 .upBig .upQ{font-size:13px}
 .upCard:hover{border-color:var(--gold)}
-/* phones held sideways: a short strip of two rows that slides sideways, so most of the field stays visible */
+/* compact: one bar above the troop buttons with every upgrade in a row (two rows on narrower screens); slides sideways if it still doesn't fit */
+body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow:hidden;touch-action:auto}
+body:not(.upBig) .upHead{flex-wrap:nowrap}
+body:not(.upBig) .upHead > span{font-size:13px}
+body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--n),minmax(50px,1fr));gap:3px;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin}
+body:not(.upBig) .upCard{touch-action:pan-x}
+@media (max-width:1259px){ body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--h),minmax(50px,1fr))} }
+/* phones held sideways: a single row that slides, to keep the bar as short as possible */
 @media (max-height:500px){
-  body:not(.upBig) .upPanel{width:min(56vw,440px);padding:4px 5px;gap:3px;overflow:hidden;touch-action:auto}
-  body:not(.upBig) .upHead{flex-wrap:nowrap}
-  body:not(.upBig) .upHead > span{font-size:12px}
-  body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
-  body:not(.upBig) .upHead .upQ b{display:inline}
-  body:not(.upBig) .upGrid{grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(2,42px);grid-auto-columns:56px;gap:3px;
-    overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:none}
-  body:not(.upBig) .upGrid::-webkit-scrollbar{display:none}
-  body:not(.upBig) .upCard{padding:2px 3px;grid-template-rows:15px auto auto;touch-action:pan-x}
+  body:not(.upBig) .upGrid{grid-template-columns:repeat(var(--n),54px)}
+  body:not(.upBig) .upCard{padding:2px 3px;grid-template-rows:15px auto auto}
   body:not(.upBig) .upCard svg{width:14px;height:14px}
   body:not(.upBig) .upCard b{font-size:9.5px}
   body:not(.upBig) .upCard small{font-size:10px}
   body:not(.upBig) .upCard .lv{font-size:9px}
+  body:not(.upBig) .upHead > span{font-size:12px}
+  body:not(.upBig) .upHead .upQ{font-size:11px}
   .upHead button{width:22px;height:22px}
+}
 }
 .upCard.off{filter:grayscale(.7) brightness(.6)}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
@@ -2758,7 +2762,7 @@ function seatHTML(s, i){
   const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${ROLE_HINT[r]}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><div class="upQ"></div><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
-    <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`;
+    <div class="upGrid" style="--n:${UPG_KEYS.length};--h:${Math.ceil(UPG_KEYS.length/2)}">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
@@ -2802,14 +2806,24 @@ function togglePanel(s, i, force, quiet){
 }
 // pin the panel to the commander's own edge of the screen (over their fortress, away from the fighting),
 // from under the top bar down to just above the trays; teammates sharing one phone take opposite edges
+// compact: a bar across the screen (or across your half when two players share the phone)
 function placePanel(panel, s, i){
   const mates = S.sides[s].seats.map((sd, j) => localSeat(s, j) ? j : -1).filter(j => j >= 0);
   const left = (s === 0) !== (mates.length > 1 && mates.indexOf(i) > 0);
   const tr = $('#trays').getBoundingClientRect(), top = Math.max($('#topbar').getBoundingClientRect().bottom, hudBottom) + 6;
-  panel.style.top = top + 'px';
-  panel.style.left = left ? 'max(8px, env(safe-area-inset-left, 0px))' : 'auto';
-  panel.style.right = left ? 'auto' : 'max(8px, env(safe-area-inset-right, 0px))';
-  panel.style.maxHeight = Math.max(120, tr.top + 14 - top) + 'px';
+  const L = 'max(8px, env(safe-area-inset-left, 0px))', R = 'max(8px, env(safe-area-inset-right, 0px))', st = panel.style;
+  if (OPT.upBig){
+    st.top = top + 'px'; st.bottom = 'auto'; st.maxHeight = Math.max(120, tr.top + 14 - top) + 'px';
+    st.left = left ? L : 'auto'; st.right = left ? 'auto' : R;
+  } else {
+    const shared = [0, 1].reduce((n, t) => n + S.sides[t].seats.filter((sd, j) => localSeat(t, j)).length, 0) > 1;
+    const head = panel.parentElement.querySelector('.head').getBoundingClientRect();
+    // phones held sideways have so little field that troops walk right above the controls, so there the bar hangs under the top bar, over the sky
+    if (matchMedia('(max-height: 500px)').matches){ st.top = top + 'px'; st.bottom = 'auto'; }
+    else { st.top = 'auto'; st.bottom = (innerHeight - head.top + 2) + 'px'; }
+    st.maxHeight = (head.top - top) + 'px';
+    st.left = shared && !left ? 'calc(50% + 4px)' : L; st.right = shared && left ? 'calc(50% + 4px)' : R;
+  }
 }
 addEventListener('resize', () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }));
 // the info line describes the upgrade under the mouse, or the one just tapped on a phone
