@@ -83,21 +83,30 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* upgrades panel, opened from a seat's star button */
 .seat{position:relative}
 .extras{grid-template-columns:repeat(5,1fr)}
-.upPanel{position:absolute;bottom:calc(100% + 6px);left:0;width:max(100%,min(340px,92vw));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;z-index:4;
-  background:rgba(24,16,9,.96);border:1.5px solid var(--edge);border-radius:12px;padding:8px;display:grid;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
-#tray1 .upPanel{left:auto;right:0}
-.upHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font:900 15px/1 var(--display);color:var(--gold)}
-.upHead button{border:1.5px solid var(--edge);background:transparent;border-radius:8px;width:32px;height:32px;cursor:pointer;display:grid;place-items:center}
-.upHead svg{width:16px;height:16px;stroke:var(--ink);stroke-width:2.4;fill:none;stroke-linecap:round}
-.upQ{font-size:13px;color:var(--muted);min-height:16px}
-.upGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
-.upCard{position:relative;overflow:hidden;display:grid;grid-template-columns:24px 1fr;gap:2px 7px;align-items:center;text-align:left;border:1.5px solid #4a3322;border-bottom:3px solid var(--team);
-  background:linear-gradient(var(--btn-a),var(--btn-b));border-radius:9px;padding:6px 7px;cursor:pointer;touch-action:pan-y;min-width:0}
-.upCard svg{grid-row:span 3;width:22px;height:22px;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.upCard b{font-size:15px;font-weight:700;line-height:1.05;padding-right:34px}
-.upCard span{font-size:12.5px;color:var(--muted);line-height:1.15}
-.upCard small{position:absolute;top:6px;right:7px;font-size:13px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
-.upCard .lv{font-size:12px;color:var(--gold);font-weight:600}
+/* a narrow, see-through column pinned to the screen edge, so the battle stays in view while you research */
+.upPanel{position:fixed;top:44px;width:min(330px,40vw);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;z-index:4;align-content:start;
+  background:rgba(24,16,9,.8);border:1.5px solid var(--edge);border-radius:12px;padding:6px;display:grid;gap:5px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.upHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font:900 14px/1 var(--display);color:var(--gold)}
+.upHead button{border:1.5px solid var(--edge);background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center}
+.upHead svg{width:14px;height:14px;stroke:var(--ink);stroke-width:2.4;fill:none;stroke-linecap:round}
+.upQ{font-size:12px;line-height:1.25;color:var(--muted);min-height:30px}
+.upQ b{color:var(--ink)}
+.upGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:4px}
+.upCard{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr auto;grid-template-rows:20px auto auto;align-items:center;text-align:left;border:1.5px solid #4a3322;border-bottom:3px solid var(--team);
+  background:linear-gradient(var(--btn-a),var(--btn-b));border-radius:8px;padding:3px 4px;cursor:pointer;touch-action:pan-y;min-width:0;line-height:1.05}
+.upCard svg{width:18px;height:18px;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.upCard b{grid-column:1/-1;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upCard small{font-size:11.5px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums;justify-self:end}
+.upCard .lv{grid-column:1/-1;font-size:10.5px;color:var(--gold);font-weight:600}
+.upCard:hover{border-color:var(--gold)}
+@media (max-height:500px){
+  .upGrid{grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:3px}
+  .upCard{padding:2px 3px;grid-template-rows:17px auto auto}
+  .upCard svg{width:15px;height:15px}
+  .upCard b{font-size:10px}.upCard small{font-size:10.5px}.upCard .lv{font-size:9.5px}
+  .upHead button{width:24px;height:24px}
+  .upQ{font-size:11px;min-height:27px}
+}
 .upCard.off{filter:grayscale(.7) brightness(.6)}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
 .seg4{grid-template-columns:repeat(4,1fr)}
@@ -1864,7 +1873,9 @@ const endDrag = e => { if (cam.drag && cam.drag.id === e.pointerId) cam.drag = n
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 // the mouse wheel (or a trackpad swipe) slides the battlefield sideways
 $('#app').addEventListener('wheel', e => {
-  if (!S || S.mode === 'demo' || e.target.closest('.upPanel, .overlay, #chatBox')) return;
+  if (!S || S.mode === 'demo' || e.target.closest('.overlay, #chatBox')) return;
+  const pan = e.target.closest('.upPanel');
+  if (pan && Math.abs(e.deltaY) >= Math.abs(e.deltaX) && (e.deltaY > 0 ? pan.scrollTop + pan.clientHeight < pan.scrollHeight - 1 : pan.scrollTop > 0)) return;
   const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY, px = dd * (e.deltaMode === 1 ? 30 : e.deltaMode === 2 ? cw : 1);
   e.preventDefault(); cam.x += px*1.2/ppw; clampCam(); cam.manual = 4;
 }, {passive:false});
@@ -2559,7 +2570,9 @@ function seatLabel(s, i){
   if (NET.role !== 'client' && locals.length === 1) return 'You';
   return `Player ${locals.indexOf(`${s}-${i}`) + 1}`;
 }
+let hudBottom = 0;   // the lowest corner health bar, so panels can open below it
 function drawHUD(){
+  hudBottom = 0;
   const fsz = Math.max(12, Math.min(18, fh*.06)), small = Math.max(10, Math.round(fsz*.72));
   for (let s = 0; s < 2; s++){
     const side = S.sides[s], left = s === 0, x = left ? 10 : cw - 10, w = Math.min(cw*.2, 160), n = side.seats.length;
@@ -2581,7 +2594,7 @@ function drawHUD(){
       ctx.strokeText(name, left ? bx : bx + w, by + small); ctx.fillText(name, left ? bx : bx + w, by + small);
       ctx.textAlign = left ? 'right' : 'left'; ctx.fillStyle = sd.alive ? '#ffffff' : '#9a9a9a';
       ctx.strokeText(hp, left ? bx + w : bx, by + small); ctx.fillText(hp, left ? bx + w : bx, by + small);
-      const barY = by + small + 3;
+      const barY = by + small + 3; hudBottom = Math.max(hudBottom, barY + 9);
       ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(bx, barY, w, 7);
       ctx.fillStyle = !sd.alive ? '#555' : p > .35 ? '#35b54e' : '#d63a2a'; ctx.fillRect(left ? bx : bx + w*(1 - p), barY, w*p, 7);
       if (sd.alive){ const q = Math.min(1, sd.xp/(sd.age < AGES.length - 1 ? XP_NEED(sd.age) : RANK_NEED(sd.rank || 0))); ctx.fillStyle = '#f2c14e'; ctx.fillRect(left ? bx : bx + w*(1 - q), barY + 7, w*q, 2); }
@@ -2690,7 +2703,7 @@ function seatHTML(s, i){
   const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${ROLE_HINT[r]}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div><div class="upQ"></div>
-    <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}">${svgi(k)}<b>${UPG[k].label}</b><span>${UPG[k].desc}</span><span class="lv"></span><small></small></button>`).join('')}</div></div>`;
+    <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
@@ -2728,10 +2741,25 @@ function togglePanel(s, i, force, quiet){
   const ui = UI[s][i]; if (!ui){ openPanels.delete(`${s}-${i}`); return; }
   const open = force != null ? force : ui.panel.hidden;
   ui.panel.hidden = !open;
-  if (open){ openPanels.add(`${s}-${i}`); const r = ui.panel.parentElement.getBoundingClientRect(); ui.panel.style.maxHeight = Math.max(140, r.top - 46) + 'px'; }
+  if (open){ openPanels.add(`${s}-${i}`); placePanel(ui.panel, s, i); }
   else openPanels.delete(`${s}-${i}`);
   if (!quiet) sfx('click');
 }
+// pin the panel to the commander's own edge of the screen (over their fortress, away from the fighting),
+// from under the top bar down to just above the trays; teammates sharing one phone take opposite edges
+function placePanel(panel, s, i){
+  const mates = S.sides[s].seats.map((sd, j) => localSeat(s, j) ? j : -1).filter(j => j >= 0);
+  const left = (s === 0) !== (mates.length > 1 && mates.indexOf(i) > 0);
+  const tr = $('#trays').getBoundingClientRect(), top = Math.max($('#topbar').getBoundingClientRect().bottom, hudBottom) + 6;
+  panel.style.top = top + 'px';
+  panel.style.left = left ? 'max(8px, env(safe-area-inset-left, 0px))' : 'auto';
+  panel.style.right = left ? 'auto' : 'max(8px, env(safe-area-inset-right, 0px))';
+  panel.style.maxHeight = Math.max(120, tr.top + 14 - top) + 'px';
+}
+addEventListener('resize', () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }));
+// the info line describes the upgrade under the mouse, or the one just tapped on a phone
+document.addEventListener('pointerover', e => { const c = e.target.closest && e.target.closest('.upCard'); if (c){ const ui = UI[+c.dataset.s][+c.dataset.i]; if (ui) ui.hover = c.dataset.up; } });
+document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.upCard'); if (c && e.pointerType === 'mouse' && !c.contains(e.relatedTarget)){ const ui = UI[+c.dataset.s][+c.dataset.i]; if (ui && ui.hover === c.dataset.up) ui.hover = null; } });
 const setTxt = (el, v) => { v = String(v); if (el.textContent !== v) el.textContent = v; };
 const setOff = (el, off) => { if (el.classList.contains('off') !== off) el.classList.toggle('off', off); };
 const setVar = (el, v) => { const x = Math.max(0, Math.min(1, v)).toFixed(3); if (el._p !== x){ el._p = x; el.style.setProperty('--p', x); } };
@@ -2761,12 +2789,14 @@ function syncUI(){
     setTxt(ab.querySelector('small'), aReady ? (last ? 'Rank up' : 'Ready') : `${Math.floor(sd.xp)}/${need}`);
     setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
     if (!ui.panel.hidden){
-      setTxt(ui.upq, sd.res.length ? 'In line: ' + sd.res.map(r => UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.');
+      const hv = ui.hover && UPG[ui.hover], line = sd.res.length ? 'In line: ' + sd.res.map(r => UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.';
+      const info = hv ? `<b>${hv.label}</b>: ${hv.desc}` + (age < hv.age ? `. Unlocks in the ${AGES[hv.age].name}` : maxLvl(ui.hover, age) < hv.cap ? '. More levels next age' : '') : line;
+      if (ui.upq._h !== info){ ui.upq._h = info; ui.upq.innerHTML = info; }
       for (const k of UPG_KEYS){
         const card = ui.cards[k], U = UPG[k], lvl = sd.up[k], pending = sd.res.filter(r => r.kind === k).length, next = lvl + pending;
         const cap = maxLvl(k, age), locked = age < U.age, max = next >= cap, cost = max ? 0 : upCost(sd, k, next);
         setTxt(card.querySelector('small'), locked ? `Age ${U.age + 1}` : lvl >= cap ? 'Max' : max ? '…' : cost);
-        setTxt(card.querySelector('.lv'), locked ? `Unlocks in the ${AGES[U.age].name}` : `Level ${lvl} of ${cap}` + (cap < U.cap ? ' · more next age' : ''));
+        setTxt(card.querySelector('.lv'), locked ? 'Locked' : `Lv ${lvl}/${cap}`);
         setOff(card, locked || max || sd.res.length >= 3 || sd.gold < cost);
         card.classList.toggle('busy', pending > 0);
       }
