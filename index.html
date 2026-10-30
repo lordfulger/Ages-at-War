@@ -391,7 +391,7 @@ const ROLE = {
   fast: {cost:110, hp:210, dmg:20, rate:.9,  range:34,  speed:95, train:3,   r:26},
   heavy:{cost:250, hp:620, dmg:38, rate:1.4, range:38,  speed:38, train:6,   r:34, trample:50},
   siege:{cost:220, hp:120, dmg:50, rate:3.6, range:400, speed:28, train:6.5, r:28, splash:50, siege:2.2, minRange:140},
-  pike: {cost:55,  hp:120, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
+  pike: {cost:50,  hp:135, dmg:16, rate:.9,  range:44,  speed:48, train:1.7, r:14},
   support:{cost:65, hp:95, dmg:0,  rate:.9,  range:0,   speed:46, train:2.2, r:14, healer:20, healGap:1.2},
   shield:{cost:75,  hp:260, dmg:0,  rate:1,   range:0,   speed:60, train:2.4, r:15, guard:1}
 };
@@ -489,9 +489,9 @@ const upTime = (k, lvl) => Math.min(60, UPG[k].t0 * Math.pow(1.1, lvl));
 // civilizations: small strengths, each paid for with a weakness
 const CIVS = [
   {name:'Standard',  desc:'No strengths and no weaknesses'},
-  {name:'Warlords',  desc:'Troops hit 10% harder but are 10% less tough', dmg:1.1, hp:.9},
-  {name:'Merchants', desc:'10% more income but 15% slower research', gold:1.1, res:.85},
-  {name:'Sages',     desc:'20% faster research but 10% less income', res:1.2, gold:.9},
+  {name:'Warlords',  desc:'Troops hit 10% harder but are 7% less tough', dmg:1.1, hp:.93},
+  {name:'Merchants', desc:'3% more income but 15% slower research', gold:1.03, res:.85},
+  {name:'Sages',     desc:'20% faster research but 3% less income', res:1.2, gold:.97},
   {name:'Builders',  desc:'Fortress 20% tougher but troops train 10% slower', fort:1.2, train:.9},
   {name:'Nomads',    desc:'Troops move and train 10% faster but the fortress is 15% weaker', spd:1.1, train:1.1, fort:.85},
   {name:'Random',    desc:'A civilization picked at random when the battle starts'}
