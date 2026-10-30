@@ -82,7 +82,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* upgrades panel, opened from a seat's star button */
 .seat{position:relative}
 .extras{grid-template-columns:repeat(5,1fr)}
-.upPanel{position:absolute;bottom:calc(100% + 6px);left:0;width:max(100%,min(340px,92vw));overflow-y:auto;z-index:4;
+.upPanel{position:absolute;bottom:calc(100% + 6px);left:0;width:max(100%,min(340px,92vw));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;z-index:4;
   background:rgba(24,16,9,.96);border:1.5px solid var(--edge);border-radius:12px;padding:8px;display:grid;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
 #tray1 .upPanel{left:auto;right:0}
 .upHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font:900 15px/1 var(--display);color:var(--gold)}
@@ -91,7 +91,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upQ{font-size:13px;color:var(--muted);min-height:16px}
 .upGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .upCard{position:relative;overflow:hidden;display:grid;grid-template-columns:24px 1fr;gap:2px 7px;align-items:center;text-align:left;border:1.5px solid #4a3322;border-bottom:3px solid var(--team);
-  background:linear-gradient(var(--btn-a),var(--btn-b));border-radius:9px;padding:6px 7px;cursor:pointer;touch-action:none;min-width:0}
+  background:linear-gradient(var(--btn-a),var(--btn-b));border-radius:9px;padding:6px 7px;cursor:pointer;touch-action:pan-y;min-width:0}
 .upCard svg{grid-row:span 3;width:22px;height:22px;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .upCard b{font-size:15px;font-weight:700;line-height:1.05;padding-right:34px}
 .upCard span{font-size:12.5px;color:var(--muted);line-height:1.15}
@@ -2716,8 +2716,9 @@ function press(e){
   act(+b.dataset.s, +b.dataset.i, b.dataset.r, b.dataset.a); return true;
 }
 const app = $('#app');
-app.addEventListener('pointerdown', e => { if (e.target.closest('.tray') && press(e)) e.preventDefault(); });
-app.addEventListener('click', e => { if (e.detail === 0 && e.target.closest('.tray')) press(e); });   // keyboard activation; taps are handled on pointerdown
+// buttons react on touch for speed, but the upgrades list waits for a tap so a swipe can scroll it
+app.addEventListener('pointerdown', e => { if (e.target.closest('.tray') && !e.target.closest('.upPanel') && press(e)) e.preventDefault(); });
+app.addEventListener('click', e => { if (e.target.closest('.tray') && (e.detail === 0 || e.target.closest('.upPanel'))) press(e); });
 document.addEventListener('keydown', e => {
   if (e.target && e.target.closest && e.target.closest('input')) return;   // typing a chat message or room code
   if (!S || S.mode === 'demo' || S.over >= 0) return;
