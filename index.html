@@ -86,26 +86,47 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* a narrow, see-through column pinned to the screen edge, so the battle stays in view while you research */
 .upPanel{position:fixed;top:44px;width:min(330px,40vw);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;z-index:4;align-content:start;
   background:rgba(24,16,9,.8);border:1.5px solid var(--edge);border-radius:12px;padding:6px;display:grid;gap:5px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
-.upHead{display:flex;align-items:center;justify-content:space-between;gap:8px;font:900 14px/1 var(--display);color:var(--gold)}
+.upHead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px;font:900 14px/1 var(--display);color:var(--gold)}
+.upHead .upQ{order:3;flex:1 0 100%;font-family:var(--body);font-weight:400}
 .upHead button{border:1.5px solid var(--edge);background:transparent;border-radius:8px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center}
 .upHead svg{width:14px;height:14px;stroke:var(--ink);stroke-width:2.4;fill:none;stroke-linecap:round}
-.upQ{font-size:12px;line-height:1.25;color:var(--muted);min-height:30px}
+.upQ{font-size:12px;line-height:1.25;color:var(--muted);min-height:30px;text-align:left;letter-spacing:0}
 .upQ b{color:var(--ink)}
 .upGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:4px}
 .upCard{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr auto;grid-template-rows:20px auto auto;align-items:center;text-align:left;border:1.5px solid #4a3322;border-bottom:3px solid var(--team);
   background:linear-gradient(var(--btn-a),var(--btn-b));border-radius:8px;padding:3px 4px;cursor:pointer;touch-action:pan-y;min-width:0;line-height:1.05}
-.upCard svg{width:18px;height:18px;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.upCard b{grid-column:1/-1;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.upCard small{font-size:11.5px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums;justify-self:end}
-.upCard .lv{grid-column:1/-1;font-size:10.5px;color:var(--gold);font-weight:600}
+.upCard svg{grid-area:1/1;width:18px;height:18px;stroke:var(--ink);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.upCard b{grid-area:2/1/3/-1;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upCard small{grid-area:1/2;font-size:11.5px;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums;justify-self:end}
+.upCard .lv{grid-area:3/1/4/-1;font-size:10.5px;color:var(--gold);font-weight:600}
+.upCard .desc{display:none}
+/* the large view: wide cards that spell out what each upgrade does */
+.upBig .upPanel{width:min(620px,64vw)}
+.upBig .upGrid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:5px}
+.upBig .upCard{grid-template-columns:24px 1fr auto;grid-template-rows:auto auto auto;gap:1px 6px;padding:5px 7px}
+.upBig .upCard svg{grid-area:1/1/4/2;width:22px;height:22px;align-self:start}
+.upBig .upCard b{grid-area:1/2;font-size:14px}
+.upBig .upCard small{grid-area:1/3;font-size:13px}
+.upBig .upCard .desc{display:block;grid-area:2/2/3/4;font-size:12px;color:var(--muted);line-height:1.15}
+.upBig .upCard .lv{grid-area:3/2/4/4;font-size:11.5px}
+.upBig .upQ{font-size:13px}
 .upCard:hover{border-color:var(--gold)}
+/* phones held sideways: a short strip of two rows that slides sideways, so most of the field stays visible */
 @media (max-height:500px){
-  .upGrid{grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:3px}
-  .upCard{padding:2px 3px;grid-template-rows:17px auto auto}
-  .upCard svg{width:15px;height:15px}
-  .upCard b{font-size:10px}.upCard small{font-size:10.5px}.upCard .lv{font-size:9.5px}
-  .upHead button{width:24px;height:24px}
-  .upQ{font-size:11px;min-height:27px}
+  body:not(.upBig) .upPanel{width:min(56vw,440px);padding:4px 5px;gap:3px;overflow:hidden;touch-action:auto}
+  body:not(.upBig) .upHead{flex-wrap:nowrap}
+  body:not(.upBig) .upHead > span{font-size:12px}
+  body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+  body:not(.upBig) .upHead .upQ b{display:inline}
+  body:not(.upBig) .upGrid{grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(2,42px);grid-auto-columns:56px;gap:3px;
+    overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:none}
+  body:not(.upBig) .upGrid::-webkit-scrollbar{display:none}
+  body:not(.upBig) .upCard{padding:2px 3px;grid-template-rows:15px auto auto;touch-action:pan-x}
+  body:not(.upBig) .upCard svg{width:14px;height:14px}
+  body:not(.upBig) .upCard b{font-size:9.5px}
+  body:not(.upBig) .upCard small{font-size:10px}
+  body:not(.upBig) .upCard .lv{font-size:9px}
+  .upHead button{width:22px;height:22px}
 }
 .upCard.off{filter:grayscale(.7) brightness(.6)}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
@@ -299,7 +320,7 @@ details[open].card summary::after{content:" −"}
 
       <section class="screen" data-screen="options" hidden>
         <div class="scrHead"><button class="back" data-go="title" aria-label="Back to the title screen"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Options</h2></div>
-        <div class="card optGrid">
+        <div class="card optGrid" id="optGrid">
           <button class="toggle" id="musicT" aria-pressed="true">Music <i>High</i></button>
           <button class="toggle" id="sfxT" aria-pressed="true">Effects <i>High</i></button>
           <button class="toggle" id="ambT" aria-pressed="true">Background sounds <i>Low</i></button>
@@ -307,6 +328,7 @@ details[open].card summary::after{content:" −"}
           <button class="toggle" id="shakeT" aria-pressed="true">Screen shake <i>On</i></button>
           <button class="toggle" id="followT" aria-pressed="true">Camera follows battle <i>On</i></button>
           <button class="toggle" id="gfxT" aria-pressed="true">Graphics <i>High</i></button>
+          <button class="toggle" id="upSizeT" aria-pressed="false">Upgrades panel <i>Compact</i></button>
           <button class="toggle" id="tiltT" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
           <p class="note tiltNote" hidden></p>
         </div>
@@ -330,12 +352,7 @@ details[open].card summary::after{content:" −"}
     <div class="panel">
       <h1 style="font-size:44px">Paused</h1>
       <button class="cta" id="resumeBtn">Resume</button>
-      <div class="row2">
-        <button class="toggle" id="musicT2" aria-pressed="true">Music <i>On</i></button>
-        <button class="toggle" id="sfxT2" aria-pressed="true">Effects <i>On</i></button>
-      </div>
-      <button class="toggle" id="tiltT2" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
-      <p class="note tiltNote" hidden></p>
+      <div id="pauseOpts"></div>
       <button class="cta ghost" id="quitBtn">Quit to menu</button>
     </div>
   </div>
@@ -766,7 +783,7 @@ function sfx(name, x){
   SFX[name](t + .01, dest);
 }
 function setToggles(){
-  for (const [id, lv] of [['musicT', A.musicLv], ['sfxT', A.sfxLv], ['musicT2', A.musicLv], ['sfxT2', A.sfxLv]]){
+  for (const [id, lv] of [['musicT', A.musicLv], ['sfxT', A.sfxLv]]){
     const b = document.getElementById(id); b.setAttribute('aria-pressed', lv > 0); b.querySelector('i').textContent = LEVEL_NAME[lv];
   }
   applyLevels();
@@ -775,7 +792,8 @@ function setToggles(){
     set('cycleT', cyclePick ? 'On' : 'Off', cyclePick);
     set('ambT', LEVEL_NAME[A.ambLv], A.ambLv > 0);
     set('shakeT', OPT.shake ? 'On' : 'Off', OPT.shake); set('followT', OPT.follow ? 'On' : 'Off', OPT.follow); set('gfxT', OPT.gfx === 'high' ? 'High' : 'Low', OPT.gfx === 'high');
-    for (const id of ['tiltT', 'tiltT2']){ set(id, tiltLabel(), !!OPT.tilt); const b = document.getElementById(id); if (b) b.hidden = !tiltOK(); }
+    set('tiltT', tiltLabel(), !!OPT.tilt); $('#tiltT').hidden = !tiltOK();
+    set('upSizeT', OPT.upBig ? 'Large' : 'Compact', !!OPT.upBig); document.body.classList.toggle('upBig', !!OPT.upBig);
   }
 }
 
@@ -2715,7 +2733,7 @@ function renderSwatches(){
   setToggles();
 }
 $('#menu').addEventListener('click', e => {
-  const b = e.target.closest('.sw'), ct = e.target.closest('#cycleT'), cv = e.target.closest('.cv');
+  const b = e.target.closest('.sw'), cv = e.target.closest('.cv');
   if (cv){
     const [, s, i] = cv.id.split('-').map(Number); civs[s][i] = (civs[s][i] + 1) % CIVS.length;
     const civ = CIVS[civs[s][i]]; $('#civNote').textContent = `${civ.name}: ${civ.desc}.`;
@@ -2729,7 +2747,6 @@ $('#menu').addEventListener('click', e => {
     for (let t = 0; t < 2; t++) for (let j = 0; j < 3; j++) if (colors[t][j] === k && !(t === s && j === i)) colors[t][j] = start;
     colors[s][i] = k; store.set('colors', colors); applyColors(colors); renderLineup();
   }
-  if (ct){ cyclePick = !cyclePick; store.set('cycle', cyclePick); renderSwatches(); }
 });
 
 /* ---- command trays ---- */
@@ -2740,8 +2757,8 @@ function seatHTML(s, i){
   if (!sd.alive) return `<div class="seat" style="--team:${c.base}"><div class="head"><b style="color:${c.hi}">${c.name}</b><span class="qtxt">Fortress fallen. Your troops fight on.</span></div></div>`;
   const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${ROLE_HINT[r]}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
-  const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div><div class="upQ"></div>
-    <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span></button>`).join('')}</div></div>`;
+  const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><div class="upQ"></div><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div class="upGrid">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
@@ -2873,16 +2890,17 @@ const app = $('#app');
 // buttons react on touch for speed, but the upgrades list waits for a tap so a swipe can scroll it
 // a second finger never gets a click, so the panel acts on a pointerup that didn't move or scroll the list
 const panelDown = {};
+const panelScroll = pan => pan.scrollTop + pan.querySelector('.upGrid').scrollLeft;
 const panelKey = el => { const b = el && el.closest('.upCard, [data-close]'); return b ? (b.dataset.up || 'close') + b.dataset.s + b.dataset.i : null; };
 app.addEventListener('pointerdown', e => {
   const pan = e.target.closest('.upPanel');
-  if (pan){ panelDown[e.pointerId] = {key: panelKey(e.target), x:e.clientX, y:e.clientY, st:pan.scrollTop}; return; }
+  if (pan){ panelDown[e.pointerId] = {key: panelKey(e.target), x:e.clientX, y:e.clientY, st:panelScroll(pan)}; return; }
   if (e.target.closest('.tray') && press(e)) e.preventDefault();
 });
 app.addEventListener('pointerup', e => {
   const d = panelDown[e.pointerId]; delete panelDown[e.pointerId]; if (!d || !d.key) return;
   const hit = document.elementFromPoint(e.clientX, e.clientY), pan = hit && hit.closest('.upPanel');
-  if (pan && panelKey(hit) === d.key && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 10 && Math.abs(pan.scrollTop - d.st) < 4) press({target: hit});
+  if (pan && panelKey(hit) === d.key && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 10 && Math.abs(panelScroll(pan) - d.st) < 4) press({target: hit});
 });
 app.addEventListener('pointercancel', e => { delete panelDown[e.pointerId]; });
 app.addEventListener('click', e => { if (e.detail === 0 && e.target.closest('.tray')) press(e); });   // keyboard activation
@@ -2930,7 +2948,7 @@ function startBattle(){
 }
 function togglePause(on){
   if (!S || S.mode === 'demo' || S.over >= 0) return;
-  paused = on; $('#pauseOv').hidden = !on; if (on){ setToggles(); tiltNote(); } A.mode = on ? 'quiet' : 'battle'; setAmbience();
+  paused = on; $('#pauseOv').hidden = !on; if (on){ $('#pauseOpts').appendChild($('#optGrid')); setToggles(); tiltNote(); } A.mode = on ? 'quiet' : 'battle'; setAmbience();
 }
 function endGame(winner){
   S.over = winner;
@@ -2954,8 +2972,8 @@ $('#menuBtn').addEventListener('click', () => { clearTimeout(endTimer); startDem
 $('#pauseBtn').addEventListener('click', () => togglePause(true));
 $('#resumeBtn').addEventListener('click', () => togglePause(false));
 $('#quitBtn').addEventListener('click', () => { if (NET.role === 'client') leaveNet(); startDemo(); });
-for (const id of ['musicT','musicT2']) document.getElementById(id).addEventListener('click', () => { audioInit(); A.musicLv = (A.musicLv + 2) % 3; store.set('musicLv', A.musicLv); setToggles(); });
-for (const id of ['sfxT','sfxT2']) document.getElementById(id).addEventListener('click', () => { audioInit(); A.sfxLv = (A.sfxLv + 2) % 3; store.set('sfxLv', A.sfxLv); setToggles(); sfx('click'); });
+for (const id of ['musicT']) document.getElementById(id).addEventListener('click', () => { audioInit(); A.musicLv = (A.musicLv + 2) % 3; store.set('musicLv', A.musicLv); setToggles(); });
+for (const id of ['sfxT']) document.getElementById(id).addEventListener('click', () => { audioInit(); A.sfxLv = (A.sfxLv + 2) % 3; store.set('sfxLv', A.sfxLv); setToggles(); sfx('click'); });
 document.addEventListener('pointerdown', audioInit, {once:true});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden){ if (S && S.mode === 'battle' && S.over < 0 && !paused && !NET.role) togglePause(true); if (A.ctx) A.ctx.suspend(); }
@@ -3198,7 +3216,8 @@ $('#leaveBtn').addEventListener('click', () => { leaveNet(); if (S && S.mode !==
 
 /* =================== main menu screens and options =================== */
 let OPT = Object.assign({shake:true, follow:true, gfx:'high'}, store.get('opts', {}));
-function showScreen(name){ document.querySelectorAll('#menu .screen').forEach(el => el.hidden = el.dataset.screen !== name); $('#menu').scrollTop = 0; if (name === 'setup') previewMap(); }
+function showScreen(name){ if (name === 'options') $('[data-screen=options] .scrHead').after($('#optGrid'));   // the settings may have been lent to the pause screen
+  document.querySelectorAll('#menu .screen').forEach(el => el.hidden = el.dataset.screen !== name); $('#menu').scrollTop = 0; if (name === 'setup') previewMap(); }
 // battlefield preview: the battle behind the menu switches to the chosen map, and a window in the setup screen shows it
 const MAP_NAMES = {coast:'Desert coast', sunset:'Aqueduct', valley:'Green valley', winter:'Winter pass', canyon:'Canyon', jungle:'Jungle'};
 const preview = $('#mapPreview'), pctx = preview.getContext('2d');
@@ -3221,7 +3240,9 @@ const flipOpt = (k, v) => { OPT[k] = v; store.set('opts', OPT); setToggles(); };
 $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
 $('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
-for (const id of ['tiltT', 'tiltT2']) $('#' + id).addEventListener('click', () => setTilt(!OPT.tilt));
+$('#tiltT').addEventListener('click', () => setTilt(!OPT.tilt));
+$('#cycleT').addEventListener('click', () => { cyclePick = !cyclePick; store.set('cycle', cyclePick); if (S && S.mode === 'battle' && NET.role !== 'client') S.cycle = cyclePick; setToggles(); });
+$('#upSizeT').addEventListener('click', () => { flipOpt('upBig', !OPT.upBig); openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }); });
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
 
 /* =================== chat for online games =================== */
