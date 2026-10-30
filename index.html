@@ -2671,8 +2671,11 @@ $('#menu').addEventListener('click', e => {
     store.set('civs', civs); renderSwatches(); netLobby(); sfx('click');
   }
   if (b){
-    const [, s, i] = b.id.split('-').map(Number), used = new Set(colors.flat()), start = colors[s][i];
+    // only commanders in the lineup hold their colors; an empty slot hands its color over and takes the old one
+    const [, s, i] = b.id.split('-').map(Number), start = colors[s][i];
+    const used = new Set(colors.flatMap((row, t) => row.filter((k, j) => lineup[t][j] && !(t === s && j === i))));
     let k = start; do { k = (k + 1) % COLORS.length; } while (used.has(k) && k !== start);
+    for (let t = 0; t < 2; t++) for (let j = 0; j < 3; j++) if (colors[t][j] === k && !(t === s && j === i)) colors[t][j] = start;
     colors[s][i] = k; store.set('colors', colors); applyColors(colors); renderLineup();
   }
   if (ct){ cyclePick = !cyclePick; store.set('cycle', cyclePick); renderSwatches(); }
