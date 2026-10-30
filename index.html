@@ -308,6 +308,7 @@ details[open].card summary::after{content:" −"}
           <button class="toggle" id="followT" aria-pressed="true">Camera follows battle <i>On</i></button>
           <button class="toggle" id="gfxT" aria-pressed="true">Graphics <i>High</i></button>
           <button class="toggle" id="tiltT" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
+          <p class="note tiltNote" hidden></p>
         </div>
         <p class="note">Low graphics turns off weather and lighting effects and draws at a lower resolution, which helps older phones. On iPhone, if you hear nothing, check the ring/silent switch.</p>
       </section>
@@ -334,6 +335,7 @@ details[open].card summary::after{content:" −"}
         <button class="toggle" id="sfxT2" aria-pressed="true">Effects <i>On</i></button>
       </div>
       <button class="toggle" id="tiltT2" aria-pressed="false" hidden>Tilt phone to scroll <i>Off</i></button>
+      <p class="note tiltNote" hidden></p>
       <button class="cta ghost" id="quitBtn">Quit to menu</button>
     </div>
   </div>
@@ -773,7 +775,7 @@ function setToggles(){
     set('cycleT', cyclePick ? 'On' : 'Off', cyclePick);
     set('ambT', LEVEL_NAME[A.ambLv], A.ambLv > 0);
     set('shakeT', OPT.shake ? 'On' : 'Off', OPT.shake); set('followT', OPT.follow ? 'On' : 'Off', OPT.follow); set('gfxT', OPT.gfx === 'high' ? 'High' : 'Low', OPT.gfx === 'high');
-    for (const id of ['tiltT', 'tiltT2']){ set(id, OPT.tilt ? 'On' : 'Off', !!OPT.tilt); const b = document.getElementById(id); if (b) b.hidden = !tiltOK(); }
+    for (const id of ['tiltT', 'tiltT2']){ set(id, tiltLabel(), !!OPT.tilt); const b = document.getElementById(id); if (b) b.hidden = !tiltOK(); }
   }
 }
 
@@ -1868,7 +1870,7 @@ function moveCam(dt){
   const t = camTarget(); cam.x += (t - cam.x) * Math.min(1, dt*1.4); clampCam();
 }
 cv.addEventListener('pointerdown', e => { if (!S || S.mode === 'demo' || (e.pointerType === 'mouse' && e.button !== 0)) return; cam.drag = {x:e.clientX, cx:cam.x, id:e.pointerId}; cam.manual = 4; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener('pointermove', e => { if (!cam.drag || cam.drag.id !== e.pointerId) return; cam.x = cam.drag.cx - (e.clientX - cam.drag.x)/ppw; clampCam(); cam.manual = 4; });
+cv.addEventListener('pointermove', e => { if (!cam.drag || cam.drag.id !== e.pointerId) return; cam.drag.lx = e.clientX; cam.x = cam.drag.cx - (e.clientX - cam.drag.x)/ppw; clampCam(); cam.manual = 4; });
 const endDrag = e => { if (cam.drag && cam.drag.id === e.pointerId) cam.drag = null; };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 // the mouse wheel (or a trackpad swipe) slides the battlefield sideways
@@ -1880,24 +1882,52 @@ $('#app').addEventListener('wheel', e => {
   e.preventDefault(); cam.x += px*1.2/ppw; clampCam(); cam.manual = 4;
 }, {passive:false});
 // tilt to scroll: tip the phone like a steering wheel and the battlefield slides that way
-let tilt = 0;
+let tilt = 0, tiltAt = -1e9, tiltBlocked = false, tiltAsking = false, tiltOnAt = 0;
 window.addEventListener('deviceorientation', e => {
   if (e.beta == null || e.gamma == null) return;
+  tiltAt = performance.now();
   const b = e.beta*Math.PI/180, g = e.gamma*Math.PI/180;
   const ang = ((screen.orientation && screen.orientation.angle != null ? screen.orientation.angle : window.orientation) || 0)*Math.PI/180;
   const ux = -Math.sin(g)*Math.cos(b), uy = Math.sin(b);   // which way is up, in the phone's own frame
   tilt = -(ux*Math.cos(ang) - uy*Math.sin(ang));          // how far the screen's sideways axis leans from level
 });
 const tiltOK = () => typeof DeviceOrientationEvent !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+// iPhones only hand out motion data after the player allows it, and only when asked straight from a tap
+const needsAsk = () => typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
 function askTilt(then){
-  const D = typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent;
-  if (D && typeof D.requestPermission === 'function') D.requestPermission().then(r => then(r === 'granted')).catch(() => then(false));
-  else then(true);
+  if (!needsAsk()){ then(true); return; }
+  if (tiltAsking) return; tiltAsking = true;
+  // only a clear 'denied' stops it: some browsers answer 'prompt' or fail the request yet still send readings
+  DeviceOrientationEvent.requestPermission().then(r => { tiltAsking = false; then(r !== 'denied', r); }).catch(() => { tiltAsking = false; then(true, 'error'); });
 }
+const tiltLive = () => performance.now() - tiltAt < 1500;
+function tiltLabel(){
+  if (!OPT.tilt) return tiltBlocked ? 'Blocked' : 'Off';
+  if (tiltLive()) return 'On';
+  return performance.now() - tiltOnAt < 2500 ? 'Starting…' : needsAsk() ? 'Tap to allow' : 'No sensor';
+}
+function tiltNote(){
+  const txt = tiltBlocked ? 'Motion access was refused. On iPhone, close the game completely and open it again, then turn this on and tap Allow.'
+    : OPT.tilt && !tiltLive() && performance.now() - tiltOnAt > 2500 ? (needsAsk() ? 'Waiting for motion access: tap anywhere and choose Allow if your phone asks.' : 'No motion readings are coming from this phone, so tilt can\'t work here.') : '';
+  document.querySelectorAll('.tiltNote').forEach(n => { n.textContent = txt; n.hidden = !txt || !tiltOK(); });
+}
+function setTilt(on){
+  if (!on){ flipOpt('tilt', false); tiltNote(); return; }
+  askTilt((ok, why) => {
+    tiltBlocked = !ok && why === 'denied';
+    if (ok){ tiltOnAt = performance.now(); flipOpt('tilt', true); } else setToggles();
+    tiltNote(); for (const ms of [700, 2800]) setTimeout(() => { setToggles(); tiltNote(); }, ms);
+  });
+}
+// after a reload an iPhone has to ask again, on the player's next tap (taps, not touches, count)
+for (const ev of ['touchend', 'click']) document.addEventListener(ev, () => {
+  if (OPT.tilt && needsAsk() && !tiltLive() && !tiltBlocked) askTilt((ok, why) => { tiltBlocked = !ok && why === 'denied'; if (tiltBlocked) flipOpt('tilt', false); setToggles(); tiltNote(); });
+}, true);
 function tiltCam(dt){
-  if (!OPT.tilt || !S || S.mode !== 'battle' || paused || cam.drag) return;
-  const m = Math.abs(tilt); if (m < .09) return;
+  if (!OPT.tilt || !S || S.mode !== 'battle' || paused) return;
+  const m = Math.abs(tilt); if (m < .09 || !tiltLive()) return;
   cam.x += Math.sign(tilt)*Math.min(1, (m - .09)/.33)*span*1.2*dt; clampCam(); cam.manual = Math.max(cam.manual, 1.5);
+  if (cam.drag){ cam.drag.cx = cam.x; cam.drag.x = cam.drag.lx ?? cam.drag.x; }   // a thumb resting on the field doesn't fight the tilt
 }
 function miniJump(e){ const r = mini.getBoundingClientRect(); cam.x = (e.clientX - r.left)/r.width*L - span/2; clampCam(); cam.manual = 5; }
 mini.addEventListener('pointerdown', e => { mini.setPointerCapture(e.pointerId); mini._down = true; miniJump(e); });
@@ -2573,6 +2603,12 @@ function seatLabel(s, i){
 let hudBottom = 0;   // the lowest corner health bar, so panels can open below it
 function drawHUD(){
   hudBottom = 0;
+  if (OPT.tilt && S.mode === 'battle' && tiltLive() && Math.abs(tilt) >= .09){
+    const r = Math.sign(tilt) > 0, a = Math.min(1, (Math.abs(tilt) - .09)/.33), x = r ? cw - 14 : 14, y = fh*.45, sz = 14;
+    ctx.save(); ctx.globalAlpha = .35 + .5*a; ctx.fillStyle = '#f6ead2'; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2;
+    for (const k of [0, 1]){ const dx = (r ? -1 : 1)*k*sz*.9; ctx.beginPath(); ctx.moveTo(x + dx + (r ? 0 : 0), y); ctx.lineTo(x + dx + (r ? -sz : sz), y - sz); ctx.lineTo(x + dx + (r ? -sz : sz), y + sz); ctx.closePath(); ctx.stroke(); ctx.fill(); }
+    ctx.restore();
+  }
   const fsz = Math.max(12, Math.min(18, fh*.06)), small = Math.max(10, Math.round(fsz*.72));
   for (let s = 0; s < 2; s++){
     const side = S.sides[s], left = s === 0, x = left ? 10 : cw - 10, w = Math.min(cw*.2, 160), n = side.seats.length;
@@ -2879,7 +2915,7 @@ function startBattle(){
 }
 function togglePause(on){
   if (!S || S.mode === 'demo' || S.over >= 0) return;
-  paused = on; $('#pauseOv').hidden = !on; A.mode = on ? 'quiet' : 'battle'; setAmbience();
+  paused = on; $('#pauseOv').hidden = !on; if (on){ setToggles(); tiltNote(); } A.mode = on ? 'quiet' : 'battle'; setAmbience();
 }
 function endGame(winner){
   S.over = winner;
@@ -3170,8 +3206,7 @@ const flipOpt = (k, v) => { OPT[k] = v; store.set('opts', OPT); setToggles(); };
 $('#shakeT').addEventListener('click', () => flipOpt('shake', !OPT.shake));
 $('#ambT').addEventListener('click', () => { audioInit(); A.ambLv = (A.ambLv + 2) % 3; store.set('ambLv', A.ambLv); setToggles(); });
 $('#followT').addEventListener('click', () => { flipOpt('follow', !OPT.follow); cam.manual = 0; });
-for (const id of ['tiltT', 'tiltT2']) $('#' + id).addEventListener('click', () => { if (OPT.tilt) flipOpt('tilt', false); else askTilt(ok => { if (ok) flipOpt('tilt', true); }); });
-document.addEventListener('pointerdown', () => { if (OPT.tilt) askTilt(() => {}); }, {once:true});   // iPhones ask again after a reload
+for (const id of ['tiltT', 'tiltT2']) $('#' + id).addEventListener('click', () => setTilt(!OPT.tilt));
 $('#gfxT').addEventListener('click', () => { flipOpt('gfx', OPT.gfx === 'high' ? 'low' : 'high'); layout(); });
 
 /* =================== chat for online games =================== */
