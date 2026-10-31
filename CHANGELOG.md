@@ -11,7 +11,7 @@ All the updates to Ages at War, newest first.
 - The battlefield preview in battle setup looks the same on phones as on PC, instead of zoomed in.
 
 ### Troops and combat
-- In the Stone Age each fortress keeps just its two starting wall defenders; more can be added from the Bronze Age, so the opening has to be fought in the field.
+- Each fortress starts with one wall defender and can have at most three in the Stone Age, so the opening has to be fought in the field. From the Bronze Age the usual limit applies (up to ten with Garrison).
 - The computer goes for zones: when the armies are about even it sends its troops to the nearest zone it doesn't hold, as long as the enemy near it is weaker, and keeps the furthest zone it does hold otherwise. Well ahead, it attacks and takes zones on the way.
 - Fortresses always mend slowly, even under attack and in the Future age, and faster once the walls have been quiet. The 25-minute overtime that crumbled the front fortresses is gone.
 - Wall defenders' shots leave from their weapons (barrel, bow or throwing hand) instead of from the middle of their bodies.
