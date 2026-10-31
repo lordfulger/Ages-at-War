@@ -65,7 +65,9 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   touch-action:none;cursor:pointer;min-width:0;line-height:1}
 .btn img{width:auto;height:72%;max-width:100%;display:block;flex:1 1 auto;min-height:0;object-fit:contain}
 .btn svg{width:22px;height:22px;flex:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none}
-.btn .cls{position:absolute;top:2px;left:4px;font:700 9.5px/1 var(--body);font-style:normal;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;pointer-events:none;text-shadow:0 1px 1px #000}
+.btn .cls{flex:none;max-width:100%;overflow:hidden;white-space:nowrap;font:700 10px/1 var(--body);font-style:normal;color:var(--muted);pointer-events:none;text-shadow:0 1px 1px #000}
+@media (max-height:500px){ .duo .btn .cls{display:none} }   /* two players per side on a phone: no room, the picture matters more */
+.duo .btn .cls{font-size:8.5px}
 .btn small{font-size:13px;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .btn.unit{height:clamp(46px,15vh,78px)}
 .btn.act{height:clamp(36px,10vh,48px)}
@@ -84,7 +86,9 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* upgrades panel, opened from a seat's star button */
 .seat{position:relative}
 .extras{grid-template-columns:repeat(9,1fr)}
-.duo .extras{grid-template-columns:repeat(5,1fr)}
+.duo .extras{grid-template-columns:repeat(9,1fr);gap:3px}
+.duo .btn.act svg{width:17px;height:17px}
+.duo .btn.act small{font-size:10px}
 /* a narrow, see-through column pinned to the screen edge, so the battle stays in view while you research */
 .upPanel{position:fixed;top:44px;width:min(330px,40vw);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;z-index:4;align-content:start;
   background:rgba(24,16,9,.8);border:1.5px solid var(--edge);border-radius:12px;padding:6px;display:grid;gap:5px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
@@ -2108,8 +2112,11 @@ function moveJoined(s, i){
   const at = spots.findIndex(([t, j]) => t === s && j === i);
   for (let n = 1; n < spots.length; n++){
     const [t, j] = spots[(at + n) % spots.length];
-    if (j < list[t].length){ list[s][i] = list[t][j]; list[t][j] = me; setSlots(list); return; }
-    if (list[s].length > 1){ list[s].splice(i, 1); list[t].push(me); setSlots(list); return; }   // never leave a side empty
+    const next = list.map(side => side.slice());
+    if (j < list[t].length){ next[s][i] = list[t][j]; next[t][j] = me; }
+    else if (list[s].length > 1){ next[s].splice(i, 1); next[t].push(me); }   // never leave a side empty
+    else continue;
+    if (next.every(side => side.filter(o => o.k === 'human').length <= 2)){ setSlots(next); return; }
   }
 }
 // a preset picked while hosting keeps everyone who joined: the first player is this phone, the other player slots go to joined players, then any still waiting
@@ -2301,7 +2308,7 @@ const HEAL_PREFS = ['any','front','back','inf','pike','rng','fast','heavy','sieg
 const RALLY_NAME = ['Attack','Zone 1','Zone 2','Zone 3'];
 function setOrder(s, i, kind){
   const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
-  if (kind === 'rally'){ sd.rally = (sd.rally + 1) % (ZONES + 1); if (!isAI(sd)) say(`${tag(s)}${sd.rally ? `Troops hold zone ${sd.rally}` : 'Troops attack'}`, s, i); }
+  if (kind === 'rally'){ sd.rally = ((sd.rally || 0) + 1) % (ZONES + 1); if (!isAI(sd)) say(`${tag(s)}${sd.rally ? `Troops hold zone ${sd.rally}` : 'Troops attack'}`, s, i); }
   else { sd.healPref = HEAL_PREFS[(HEAL_PREFS.indexOf(sd.healPref) + 1) % HEAL_PREFS.length]; const hp = sd.healPref; if (!isAI(sd)) say(`${tag(s)}${hp === 'any' ? 'Medics back to default: the most hurt nearby' : hp === 'front' ? 'Medics stay with the front line' : hp === 'back' ? 'Medics stay with the back line' : `Medics stay with ${STATS[sd.age][hp].name}`}`, s, i); }
   sfx('click'); return true;
 }
@@ -2332,12 +2339,13 @@ function muzzle(u){
 function dmgVs(base, arole, trole){ return base * ((BONUS[arole] && BONUS[arole][trole]) || 1); }
 function hurtUnit(e, amt, src){
   if (e.dead) return;
-  e.hp -= amt * (e.tk || 1); e.hit = .12;
+  e.hp -= amt * (e.tk || 1); if (src !== 'gas') e.hit = .12;   // gas chokes quietly instead of flashing every frame
   if (e.hp <= 0){
     e.dead = true;
     const foeS = 1 - e.side, foe = S.sides[foeS], st = statOf(e), cut = src === 'def' ? .5 : 1;   // wall kills pay half
     const bounty = st.cost * .2 * cut;
-    foe.seats.forEach(sd => earn(sd, bounty / foe.seats.length * (1 + .05*sd.up.plunder), sd.alive ? st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length) : 0));
+    const standing = foe.seats.filter(sd => sd.alive), nb = standing.length || 1;
+    standing.forEach(sd => earn(sd, bounty / nb * (1 + .05*sd.up.plunder), st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length)));
     S.fx.push({k:'corpse', d:st.d, age:e.age, civ:e.civ, side:e.side, col:e.col, x:e.x, z:e.z, t:0, dur:4});
     S.fx.push({k:'coin', x:e.x, z:e.z, t:0, dur:.9, txt:'+' + Math.round(bounty)});
     if (st.d.f === 'v' || st.d.f === 's'){ S.fx.push({k:'boom', x:e.x, z:e.z, t:0, dur:.55, big:true, seed:Math.random()}); sfx('wreck', e.x); }
@@ -2354,7 +2362,7 @@ function hurtBase(s, amt){
 }
 function fortFalls(s, i){
   const side = S.sides[s], sd = side.seats[i], x = gateX(s, i);
-  sd.alive = false; sd.hp = 0; sd.q = []; sd.res = [];
+  sd.alive = false; sd.hp = 0; sd.q = []; sd.res = []; sd.rally = 0; sd.healPref = 'any'; sd.focus = null;   // their troops fight on, attacking
   for (let k = 0; k < 6; k++) S.fx.push({k:'boom', x: x - dirOf(s)*Math.random()*FORT, z:Math.random(), t:0, dur:.8, big:true, seed:Math.random()});
   S.shake = .5; sfx('wreck', x); sfx('horn', x);
   renderFort(s, i);
@@ -2467,10 +2475,13 @@ function updateZones(dt){
   if (!S.zones) S.zones = Array.from({length:ZONES}, () => ({own:-1, seat:0, by:-1, bySeat:0, prog:0}));
   S.zones.forEach((z, k) => {
     const zx = zoneX(k), here = [[], []];
-    for (const u of S.units) if (!u.dead && Math.abs(u.x - zx) <= ZONE_R) here[u.side].push(u);
+    for (const u of S.units) if (!u.dead && Math.abs(u.x - zx) <= ZONE_R){ if (u.zin !== k){ u.zin = k; u.zt = S.t; } here[u.side].push(u); } else if (u.zin === k) u.zin = -1;
     const s = here[0].length && !here[1].length ? 0 : here[1].length && !here[0].length ? 1 : -1;
+    if (z.own >= 0 && !(S.sides[z.own].seats[z.seat] || {}).alive){   // its commander fell: a teammate takes it over, or it goes neutral
+      const heir = S.sides[z.own].seats.findIndex(sd => sd.alive); if (heir >= 0) z.seat = heir; else z.own = -1;
+    }
     if (s < 0 || s === z.own){ z.by = -1; z.prog = 0; return; }
-    if (z.by !== s){ z.by = s; z.prog = 0; z.bySeat = here[s][0].seat; }
+    if (z.by !== s){ z.by = s; z.prog = 0; z.bySeat = here[s].reduce((a, b) => b.zt < a.zt ? b : a).seat; }
     if (!S.sides[s].seats[z.bySeat] || !S.sides[s].seats[z.bySeat].alive) z.bySeat = S.sides[s].seats.findIndex(sd => sd.alive);
     z.prog += dt;
     if (z.prog >= ZONE_TIME && z.bySeat >= 0){
@@ -2535,7 +2546,7 @@ function update(dt){
     if (st.healer){   // healers patch up the most hurt ally nearby and stay behind the front line
       const pref = (S.sides[u.side].seats[u.seat] || {}).healPref || 'any';
       if (u.atk <= 0){
-        let best = null, bf = 1, bp = 1;
+        let best = null, bf = Infinity;
         // heal reach is short, and each troop takes healing at most every 0.6 seconds, so piling healers behind one tank stops paying off;
         // by default the most hurt comes first; front or back picks the hurt troop furthest forward or furthest back; a troop type comes first, then the most hurt
         for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 70 && S.t - (f.healedAt || -9) >= (st.healGap || 1) && f.hp < f.max){
@@ -2586,7 +2597,8 @@ function update(dt){
     } else {
       const blind = st.minRange && S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < st.minRange + 20);   // siege waits for its escort
       const rx = rallyX(u, st);
-      if (rx != null) walkTo(u, st, rx, dt);   // ordered to hold a zone: go there, back the way they came if need be
+      if (rx != null && !(blind && (rx - u.x)*d > 0)) walkTo(u, st, rx, dt);   // ordered to hold a zone: go there, back the way they came if need be (siege still waits for its escort)
+      else if (rx != null) u.back = false;
       else { u.back = false; if (!blind){ u.x += d * st.speed * (u.spd || 1) * dt; u.step += dt * st.speed / 7; } }
       u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r);
       if (OPT.gfx !== 'low' && (u.role === 'fast' || u.role === 'heavy' || st.d.f === 'v') && Math.random() < dt*5) S.fx.push({k:'dust', x:u.x - d*st.r, z:u.z, t:0, dur:.8, seed:Math.random()});
@@ -2613,7 +2625,7 @@ function update(dt){
   }
   for (const f of S.fx){
     f.t += dt;
-    if (f.k === 'gas') for (const e of S.units) if (e.side !== f.side && !e.dead && Math.abs(e.x - f.x) <= BARRAGE_R*1.1) hurtUnit(e, f.dps*dt*(statOf(e).d.f === 'v' ? .3 : 1), 'unit');
+    if (f.k === 'gas') for (const e of S.units) if (e.side !== f.side && !e.dead && Math.abs(e.x - f.x) <= BARRAGE_R*1.1) hurtUnit(e, f.dps*dt*(statOf(e).d.f === 'v' ? .3 : e.role === 'heavy' ? .6 : 1), 'gas');
     if (f.k === 'barrage' && !f.hit && f.t >= f.dur*.72){
       f.hit = true;
       const B = BARRAGE[f.age], gas = B.kind === 'gas', dmg = 70*POW(f.age)*(1 + .1*f.lvl)*(gas ? .4 : 1), foe = 1 - f.side;
@@ -3249,7 +3261,7 @@ function drawFort(s, i){
     const n = Math.min(7, defenders(s, i)), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
     for (let a = 0; a < n; a++){
       ctx.save(); ctx.translate(X(defX(s, i, a)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
-      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK === a && S.t - (sd.defAt ?? -9) < Math.min(.3, .6/defenders(s, i)), ph:0, civ:sd.civ}, false);
+      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK === a && S.t - (sd.defAt ?? -9) < .3, ph:0, civ:sd.civ}, false);
       ctx.restore();
     }
   }
@@ -3698,7 +3710,7 @@ function syncUI(){
   for (let s = 0; s < 2; s++) UI[s].forEach((ui, i) => {
     if (!ui) return;
     const side = S.sides[s], sd = side.seats[i], age = sd.age;
-    setTxt(ui.gold, Math.floor(sd.gold)); setTxt(ui.inc, '+' + income(sd, s) + '/s');
+    setTxt(ui.gold, Math.floor(sd.gold)); setTxt(ui.inc, sd.focus && sd.focus.k === 'xp' ? 'studying' : '+' + income(sd, s) + '/s');
     if (sd.q.length){ const it = sd.q[0], st = STATS[it.a][it.r]; setTxt(ui.qtxt, `Training: ${st.name}` + (sd.q.length > 1 ? ` +${sd.q.length - 1}` : '')); setVar(ui.qbar, sd.qt / trainTime(sd, it)); }
     else if (sd.res.length){ const r = sd.res[0]; setTxt(ui.qtxt, `Upgrading: ${UPG[r.kind].label} ${sd.up[r.kind] + 1}`); setVar(ui.qbar, r.t / r.dur); }
     else { setTxt(ui.qtxt, AGES[age].name); setVar(ui.qbar, 0); }
@@ -3981,7 +3993,7 @@ function onHostData(conn, m){
   const key = ownerKey(conn.peer); if (!key) return;
   const [s, i] = key.split('-').map(Number), sd = S.sides[s].seats[i];
   if (!sd || sd.kind !== 'remote') return;
-  if (m.up && UPG[m.up]) research(s, i, m.up);
+  if (m.up && Object.prototype.hasOwnProperty.call(UPG, m.up)) research(s, i, m.up);
   else if (m.r && ROLES.includes(m.r)) queueUnit(s, i, m.r);
   else if (m.a === 'cancel') cancelQueue(s, i);
   else if (m.a === 'def') buyDefender(s, i);
