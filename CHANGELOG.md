@@ -33,6 +33,7 @@ All the updates to Ages at War, newest first.
 - Troop buttons show each troop's class, and tooltips name it.
 
 ### Sound
+- Animal calls (horse neighs, camel grunts, wolf snarls and barks, mammoth and elephant trumpets) and creaking timber on catapults, siege engines and wrecks no longer sound electronic: they use natural rendered voices and real stick-slip wood creaks.
 - Troop voices sound human instead of robotic: grunts, effort sounds and a shout as troops march out.
 - Each melee weapon has its own sound: swords swing and clang or cut, spears and pikes thrust, clubs swing and land, shields bash.
 - More realistic effects: layered gunfire, ringing steel, plucked bows, real explosions and engines.

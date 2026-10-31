@@ -638,7 +638,15 @@ function audioGraph(c){
   A.vx = {
     hurt:  rv(10, k => voiceBuf(c, {f0:rr(135, 215), f1:rr(.55, .72), dur:rr(.2, .42), v:anyOf(['uh', 'a', 'o', 'e']), asp:rr(.25, .5), jit:rr(.02, .04), fry: k % 3 ? 0 : .3, shift:rr(.92, 1.1)})),
     effort:rv(6, () => voiceBuf(c, {f0:rr(115, 160), f1:.8, dur:rr(.11, .2), v:anyOf(['a', 'uh']), asp:rr(.8, 1.1), jit:.03, shift:rr(.95, 1.1)})),
-    cry:   rv(5, () => voiceBuf(c, {f0:rr(150, 200), f1:rr(.7, .85), peak:rr(.15, .3), dur:rr(.5, .75), v:anyOf(['a', 'a', 'o']), asp:rr(.3, .45), jit:.018, shift:rr(.95, 1.08)}))
+    cry:   rv(5, () => voiceBuf(c, {f0:rr(150, 200), f1:rr(.7, .85), peak:rr(.15, .3), dur:rr(.5, .75), v:anyOf(['a', 'a', 'o']), asp:rr(.3, .45), jit:.018, shift:rr(.95, 1.08)})),
+    // animals: the same voice model with an animal's pitch, vibrato and breath
+    neigh: rv(4, () => voiceBuf(c, {f0:rr(620, 720), f1:.62, dur:rr(.7, .9), v:anyOf(['e', 'a']), vib:.09, vibF:rr(14, 18), asp:.55, jit:.03, shim:.2, shift:1.45})),
+    camel: rv(3, () => voiceBuf(c, {f0:rr(105, 130), f1:.75, dur:rr(.5, .65), v:'o', vib:.18, vibF:rr(20, 26), asp:.8, jit:.09, shim:.4})),
+    snarl: rv(3, () => voiceBuf(c, {f0:rr(85, 105), f1:.85, dur:.5, v:'o', vib:.2, vibF:28, asp:.9, jit:.12, shim:.45, shift:.9})),
+    bark:  rv(3, () => voiceBuf(c, {f0:rr(380, 450), f1:.6, dur:.15, v:'a', asp:.5, jit:.04, shift:1.2})),
+    trumpetHi: rv(3, () => voiceBuf(c, {f0:rr(260, 300), f1:2, peak:.1, dur:.85, v:'a', vib:.04, vibF:11, asp:1, jit:.025, shim:.25, shift:1.35})),
+    trumpetLo: rv(3, () => voiceBuf(c, {f0:rr(170, 200), f1:1.9, peak:.1, dur:.95, v:'a', vib:.04, vibF:10, asp:1, jit:.025, shim:.25, shift:1.2})),
+    creak: rv(4, () => creakBuf(c, {f0:rr(28, 40), f1:rr(45, 65), dur:rr(.45, .6)}))
   };
   // plucked strings (Karplus-Strong) for bows, crossbows and ballistas
   A.ks = [196, 131, 330].map(f => { const n = Math.round(sr*.8), b = c.createBuffer(1, n, sr), y = b.getChannelData(0), N = Math.round(sr/f);
@@ -850,20 +858,35 @@ function voiceBuf(c, o){
   let ph = 1, jit = 0, amp = 1, prev = 0, lp = 0;
   for (let i = 0; i < n; i++){
     const p = i/n, fry = o.fry && p > 1 - o.fry;
-    let f = o.f0*Math.pow(o.f1, p)*(1 + (o.peak || 0)*Math.sin(Math.PI*Math.min(1, p*1.7)));
+    let f = o.f0*Math.pow(o.f1, p)*(1 + (o.peak || 0)*Math.sin(Math.PI*Math.min(1, p*1.7)))*(1 + (o.vib || 0)*Math.sin(2*Math.PI*(o.vibF || 6)*i/sr));
     if (fry) f *= .42;
-    if (ph >= 1){ ph -= Math.floor(ph); jit = (Math.random()*2 - 1)*o.jit*(fry ? 5 : 1); amp = 1 + (Math.random()*2 - 1)*(fry ? .5 : .1); }
+    if (ph >= 1){ ph -= Math.floor(ph); jit = (Math.random()*2 - 1)*o.jit*(fry ? 5 : 1); amp = 1 + (Math.random()*2 - 1)*(fry ? .5 : o.shim || .1); }
     ph += f*(1 + jit)/sr;
     const g = ph < .4 ? .5*(1 - Math.cos(Math.PI*ph/.4)) : ph < .6 ? Math.cos(Math.PI/2*(ph - .4)/.2) : 0;
     const env = Math.min(1, p*o.dur/.018)*Math.pow(Math.min(1, (1 - p)/.45), 1.6);
     lp += .3*((Math.random()*2 - 1) - lp);
     y[i] = env*((g - prev)*amp*6 + lp*o.asp*(.3 + g)*.5); prev = g;
   }
-  FORM[o.v].forEach((F, k) => {   // two-pole resonators in series
-    const bw = [90, 110, 150, 200][k], r = Math.exp(-Math.PI*bw/sr), b1 = 2*r*Math.cos(2*Math.PI*F*sh/sr), b2 = -r*r, a0 = 1 - b1 - b2;
+  resonate(y, sr, FORM[o.v].map(F => F*sh), [90, 110, 150, 200]);
+  return b;
+}
+// two-pole resonators in series, then normalise
+function resonate(y, sr, fs, bws){
+  const n = y.length;
+  fs.forEach((F, k) => {
+    const r = Math.exp(-Math.PI*bws[k]/sr), b1 = 2*r*Math.cos(2*Math.PI*F/sr), b2 = -r*r, a0 = 1 - b1 - b2;
     let y1 = 0, y2 = 0; for (let i = 0; i < n; i++){ const v = a0*y[i] + b1*y1 + b2*y2; y2 = y1; y1 = v; y[i] = v; }
   });
   let m = 0; for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(y[i])); if (m) for (let i = 0; i < n; i++) y[i] /= m;
+}
+// timber groaning under load: stick-slip clicks at a wandering rate, rung through the beam's own resonances
+function creakBuf(c, o){
+  const sr = c.sampleRate, n = Math.round(sr*o.dur), b = c.createBuffer(1, n, sr), y = b.getChannelData(0);
+  for (let i = 0, next = 0; i < n; i++){
+    const p = i/n, f = o.f0*Math.pow(o.f1/o.f0, p)*(1 + .25*Math.sin(p*9));
+    if (i >= next){ const a = (.4 + Math.random()*.6)*Math.sin(Math.PI*p); for (let j = 0; j < 12 && i + j < n; j++) y[i + j] += a*(Math.random()*2 - 1)*Math.exp(-j/3); next = i + sr/f*(1 + (Math.random() - .5)*.35); }
+  }
+  resonate(y, sr, [rr(330, 480), rr(760, 1050), rr(1600, 2100)], [70, 100, 160]);
   return b;
 }
 function say2(d, t, kind, vol, rate = rr(.92, 1.08)){
@@ -878,20 +901,6 @@ function steel(d, t, f, dur, vol){
   nb(d, t, .02, vol*1.5, {type:'highpass', f:4500});
 }
 function swish(d, t, vol, f = rr(500, 800)){ nb(d, t, .13, vol, {f, q:1.4, to:f*3.2, toT:.09, atk:.06}); }
-// a voice: sawtooth through two vowel formants, with optional roughness and breath (cries, neighs, trumpeting)
-const VOWEL = {a:[730, 1090], o:[570, 840], u:[440, 1020], uh:[640, 1190], e:[530, 1840]};
-function vox(d, t, f0, f1, dur, vol, v, o = {}){
-  const c = A.ctx, g = c.createGain(), mix = c.createGain(), F = VOWEL[v] || VOWEL.uh, sh = o.shift || 1, a = o.atk || .02, srcs = [];
-  for (const det of o.det ? [-o.det, o.det] : [0]){
-    const s = c.createOscillator(); s.type = 'sawtooth'; s.detune.value = det;
-    s.frequency.setValueAtTime(f0, t); s.frequency.exponentialRampToValueAtTime(f1, t + dur); s.connect(mix); srcs.push(s);
-  }
-  if (o.vib){ const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.vibF || 6; lg.gain.value = o.vib; l.connect(lg); for (const s of srcs) lg.connect(s.frequency); l.start(t); l.stop(t + dur + .05); }
-  for (const ff of F){ const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = ff*sh; f.Q.value = o.q || 6; mix.connect(f).connect(g); }
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol*3, t + a); g.gain.setTargetAtTime(0, t + dur*.6, dur*.12);
-  g.connect(d); for (const s of srcs){ s.start(t); s.stop(t + dur + .05); }
-  if (o.breath) nb(d, t, dur*.9, vol*o.breath*.4, {f:F[1]*sh, q:1.5, atk:a});
-}
 // a gunshot: muzzle crack, blast body, chest thump and a rolling tail
 function bang(d, t, far, o){
   const v = o.v || 1;
@@ -911,7 +920,7 @@ function hooves(d, t, n, heavy){   // a canter: da-da-dum
   for (let k = 0; k < n; k++) nb(d, t + (k/3 | 0)*.42 + pat[k % 3] + rr(0, .015), .06, .3, {f: heavy ? rr(250, 400) : rr(500, 800), q:2.5});
 }
 function stomp(d, t, v){ nb(d, t, .35, v, {buf:A.brown, type:'lowpass', f:130, atk:.01}); }
-function trumpet(d, t, f0, f1, dur){ vox(d, t, f0, f1, dur, .3, 'a', {det:9, vib:f0*.05, vibF:11, breath:.9, q:3, atk:.06, shift:1.3}); }
+function trumpet(d, t, low){ say2(d, t, low ? 'trumpetLo' : 'trumpetHi', .9); nb(d, t + .05, .7, .08, {f:low ? 900 : 1300, q:1.2, atk:.1}); }   // the call, with breath rasping through the trunk
 // what made a sound at x: the shot fired or landing there, and the nearest troop's age and kit
 const SPAWN = new Set(['foot', 'wolf', 'mammoth', 'camel', 'elephant', 'horse', 'creak', 'engine', 'hum']);
 function sndSource(name, x){
@@ -945,28 +954,25 @@ const SFX = {
     if (Math.random() < .5){ const f = rr(380, 460);   // a howl
       tone(d, 'sine', f, t, 1.1, .25, {to:f*1.55, toAt:.35, vib:6, vibF:5, atk:.15}); tone(d, 'sine', f*2.01, t, 1, .06, {to:f*3.1, toAt:.35, atk:.2});
       nb(d, t, .9, .02, {f:f*3, q:2, atk:.2}); return 1.1; }
-    vox(d, t, rr(85, 110), rr(70, 90), .5, .12, 'o', {vib:18, vibF:28, breath:.6, q:5});   // a snarl, then a bark
-    vox(d, t + .55, rr(380, 450), 250, .14, .15, 'a', {breath:.4});
+    say2(d, t, 'snarl', .4); say2(d, t + .55, 'bark', .5);   // a snarl, then a bark
     return .75;
   },
-  mammoth(t, d){ trumpet(d, t, rr(170, 200), rr(330, 380), .9); stomp(d, t + .1, .45); stomp(d, t + .65, .4); return 1; },
-  elephant(t, d){ trumpet(d, t, rr(260, 300), rr(520, 600), .8); stomp(d, t + .1, .4); stomp(d, t + .6, .35); return .95; },
+  mammoth(t, d){ trumpet(d, t, true); stomp(d, t + .1, .45); stomp(d, t + .65, .4); return 1; },
+  elephant(t, d){ trumpet(d, t, false); stomp(d, t + .1, .4); stomp(d, t + .6, .35); return .95; },
   camel(t, d){
-    vox(d, t, rr(110, 130), rr(80, 95), .55, .25, 'o', {vib:20, vibF:24, breath:.6});
+    say2(d, t, 'camel', .7);
     nb(d, t + .1, .4, .2, {buf:A.crk, type:'lowpass', f:600});   // gurgle
     hooves(d, t + .2, 3, false); return .8;
   },
   horse(t, d, far, h){
-    vox(d, t, rr(620, 720), rr(380, 440), .75, .22, anyOf(['e', 'a']), {vib:45, vibF:17, breath:.3, q:5, shift:1.4});   // the neigh
+    say2(d, t, 'neigh', .6);   // the neigh
     nb(d, t + .8, .2, .12, {f:500, q:1});   // snort
     hooves(d, t + .1, 6, h.d && h.d.armor);
     if (h.d && h.d.armor) nb(d, t + .1, .5, .06, {buf:A.crk, type:'highpass', f:4000});   // barding jingles
     return 1.1;
   },
   creak(t, d){
-    const f = rr(28, 40);   // wood groaning under load: slow stick-slip pulses ringing through the timber
-    tone(d, 'sawtooth', f, t, .5, .5, {to:f*1.6, bp:rr(600, 900), q:9, atk:.05});
-    tone(d, 'sawtooth', f*1.3, t + .45, .4, .35, {to:f, bp:rr(500, 800), q:9, atk:.05});
+    say2(d, t, 'creak', .55); say2(d, t + .45, 'creak', .4, rr(.8, .95));   // wood groaning under load
     nb(d, t, 1, .3, {buf:A.brown, type:'lowpass', f:180, atk:.15});   // wheels rolling over the ground
     nb(d, t + .3, .06, .2, {f:rr(350, 500), q:3});
     return 1;
@@ -1019,9 +1025,8 @@ const SFX = {
     return .35;
   },
   launch(t, d){
-    const f = rr(30, 40);
     nb(d, t, .05, .25, {buf:A.crk, f:2500, q:.8});                                   // trigger and rope letting go
-    tone(d, 'sawtooth', f, t, .3, .45, {to:f*1.8, bp:rr(650, 900), q:8, atk:.01});     // timber creaking under the load
+    say2(d, t, 'creak', .5, rr(1.1, 1.3));                                             // timber creaking under the load
     nb(d, t + .02, .3, .2, {f:rr(300, 450), q:1, to:1200, atk:.12});                   // the arm sweeping through the air
     tone(d, 'sine', rr(100, 130), t + .16, .3, .45, {to:50});                           // and slamming into the crossbar
     nb(d, t + .16, .14, .35, {f:rr(250, 400), q:2});
@@ -1172,7 +1177,7 @@ const SFX = {
     tone(d, 'sine', rr(60, 75), t, .55, .5, {to:32});
     nb(d, t, .7, .5, {buf:A.brown, type:'lowpass', f:500});
     nb(d, t, 1.1, .45, {buf:A.crk, f:rr(1400, 2200), q:.6, atk:.005});   // timber splintering
-    tone(d, 'sawtooth', rr(30, 45), t + .05, .5, .4, {to:20, bp:rr(500, 800), q:8});   // a beam groaning as it gives
+    say2(d, t + .05, 'creak', .45, rr(.6, .75));   // a beam groaning as it gives
     nb(d, t + rr(.3, .5), .2, .3, {f:rr(300, 450), q:2});   // pieces landing
     return 1.2;
   },
