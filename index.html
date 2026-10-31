@@ -3108,103 +3108,313 @@ function renderLayers(){
 
 /* ---- fortresses (one image per side, redrawn when the age changes) ---- */
 const fortCv = [null, null];
-function blocks(c, x, y, w, h, bh, bw, R, hue, sat, lo, hi2){
-  for (let row = 0, yy = y; yy < y + h; yy += bh, row++)
-    for (let xx = x - (row % 2 ? bw/2 : 0); xx < x + w; xx += bw){
-      const x0 = Math.max(x, xx), x1 = Math.min(x + w, xx + bw); if (x1 <= x0) continue;
-      c.fillStyle = `hsl(${hue + (R() - .5)*6},${sat}%,${lo + R()*(hi2 - lo)}%)`; c.fillRect(x0, yy, x1 - x0, Math.min(bh, y + h - yy));
-      c.fillStyle = 'rgba(0,0,0,.22)'; c.fillRect(x0, yy + bh - 1, x1 - x0, 1); c.fillRect(x1 - 1, yy, 1, bh);
-      c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(x0, yy, x1 - x0, 1);
+/* ---- fortress drawing helpers: light comes from the upper left, as on the troops ---- */
+const hsl = (h, s, l) => `hsl(${h},${s}%,${l}%)`;
+// dressed stone or brick: each block with its own tone, a lit top edge, a shadowed foot, mortar between, chips and the odd stain or moss
+function masonry(c, x, y, w, h, bh, bw, R, o){
+  c.fillStyle = o.mortar; c.fillRect(x, y, w, h);
+  const gap = o.gap ?? 1.4;
+  for (let row = 0, yy = y; yy < y + h - .5; yy += bh, row++){
+    const rh = Math.min(bh, y + h - yy), low = (yy - y)/h;
+    for (let xx = x - (row % 2 ? bw/2 : 0) - (o.jag ? R()*bw*.3 : 0); xx < x + w; xx += bw*(o.jag ? .8 + R()*.4 : 1)){
+      const x0 = Math.max(x, xx) + gap/2, x1 = Math.min(x + w, xx + bw) - gap/2; if (x1 - x0 < 1) continue;
+      const l = o.lo + R()*(o.hi - o.lo), hu = o.hue + (R() - .5)*(o.hv || 6);
+      const g = c.createLinearGradient(0, yy, 0, yy + rh); g.addColorStop(0, hsl(hu, o.sat, l + 5)); g.addColorStop(1, hsl(hu, o.sat, l - 5));
+      c.fillStyle = g; c.fillRect(x0, yy + gap/2, x1 - x0, rh - gap);
+      c.fillStyle = 'rgba(255,250,235,.18)'; c.fillRect(x0, yy + gap/2, x1 - x0, 1); c.fillRect(x0, yy + gap/2, 1, rh - gap);
+      c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(x0, yy + rh - gap/2 - 1.2, x1 - x0, 1.2); c.fillRect(x1 - 1.2, yy + gap/2, 1.2, rh - gap);
+      if (R() < .35){ c.fillStyle = `rgba(0,0,0,${.06 + R()*.08})`; c.beginPath(); c.arc(x0 + R()*(x1 - x0), yy + R()*rh, .8 + R()*1.6, 0, Math.PI*2); c.fill(); }   // a chip
+      if (o.moss && R() < o.moss*low*low){ c.fillStyle = `rgba(${70 + R()*30},${110 + R()*30},50,.55)`; c.beginPath(); c.ellipse(x0 + R()*(x1 - x0), yy + rh*.8, 2 + R()*bw*.2, 1 + R()*2.5, 0, 0, Math.PI*2); c.fill(); }
     }
+  }
+}
+// sunlight across a face: brighter on the left, darker to the right and near the ground
+function lightFace(c, x, y, w, h, k = 1){
+  let g = c.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, `rgba(255,240,205,${.12*k})`); g.addColorStop(.55, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(25,12,0,${.3*k})`);
+  c.fillStyle = g; c.fillRect(x, y, w, h);
+  g = c.createLinearGradient(0, y + h*.72, 0, y + h); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(15,8,0,${.32*k})`);
+  c.fillStyle = g; c.fillRect(x, y + h*.72, w, h*.28);
+}
+// battlements: merlons with a lit face and a shadowed side, plus the wall-walk ledge under them
+function merlons(c, x0, x1, y, mw, mh, step, fill, edge, stepped){
+  c.fillStyle = edge; c.fillRect(x0, y - 2, x1 - x0, 4);
+  for (let x = x0; x + mw <= x1 + 1; x += step){
+    c.fillStyle = fill; c.fillRect(x, y - mh, mw, mh);
+    if (stepped){ c.fillRect(x + mw*.22, y - mh*1.55, mw*.56, mh*.6); c.fillStyle = 'rgba(255,255,255,.22)'; c.fillRect(x + mw*.22, y - mh*1.55, mw*.56, 1.2); }
+    c.fillStyle = 'rgba(255,255,255,.25)'; c.fillRect(x, y - mh, mw, 1.2);
+    c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(x + mw - mw*.2, y - mh, mw*.2, mh);
+    c.strokeStyle = 'rgba(30,20,10,.45)'; c.lineWidth = .8; c.strokeRect(x + .4, y - mh + .4, mw - .8, mh - .8);
+  }
+}
+// an arched gateway: stone voussoirs and jambs, a dark recess, then planked doors with iron bands and studs, or a portcullis
+function gateway(c, dx, dw, base, sideH, o){
+  const r = dw/2, cx = dx + r, top = base - sideH, n = 9;
+  if (o.stone){
+    for (let y = base, k = 0; y > top; k++){ const bh = Math.min(dw*.2, y - top); for (const sx of [dx - dw*.16, dx + dw]){ c.fillStyle = k % 2 ? o.stone[0] : o.stone[1]; c.fillRect(sx - (k % 2 ? dw*.03 : 0), y - bh, dw*.16 + (k % 2 ? dw*.03 : 0), bh - 1); c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(sx, y - bh, dw*.16, 1); } y -= bh; }
+    for (let k = 0; k < n; k++){
+      const a0 = Math.PI + k*Math.PI/n, a1 = a0 + Math.PI/n;
+      c.beginPath(); c.arc(cx, top, r*1.32, a0 + .01, a1 - .01); c.arc(cx, top, r, a1 - .01, a0 + .01, true); c.closePath();
+      c.fillStyle = k === 4 ? o.stone[2] || o.stone[0] : k % 2 ? o.stone[0] : o.stone[1]; c.fill(); c.strokeStyle = 'rgba(20,12,4,.45)'; c.lineWidth = .9; c.stroke();
+    }
+  }
+  const path = () => { c.beginPath(); c.moveTo(dx, base); c.lineTo(dx, top); c.arc(cx, top, r, Math.PI, 0); c.lineTo(dx + dw, base); c.closePath(); };
+  path(); c.fillStyle = vgrad(c, top - r, base, '#0b0704', '#24170d'); c.fill();
+  c.save(); path(); c.clip();
+  if (o.wood){
+    const inset = dw*.06, pw = (dw - inset*2)/6;
+    for (let k = 0; k < 6; k++){ const x = dx + inset + k*pw; c.fillStyle = k % 2 ? shade(o.wood, -.08) : o.wood; c.fillRect(x, top - r, pw, base - top + r); c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x + pw - 1, top - r, 1, base - top + r); c.fillStyle = 'rgba(255,230,190,.12)'; c.fillRect(x, top - r, 1, base - top + r); }
+    c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(cx - 1, top - r, 2, base - top + r);   // the doors meet
+    for (const fy of [.18, .55, .85]){ const y = top - r + (base - top + r)*fy; c.fillStyle = o.iron || '#3b3a38'; c.fillRect(dx, y, dw, dw*.05); c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(dx, y, dw, 1);
+      for (let x = dx + dw*.1; x < dx + dw; x += dw*.13){ c.fillStyle = o.stud || '#c9a24a'; c.beginPath(); c.arc(x, y + dw*.025, dw*.014 + .5, 0, Math.PI*2); c.fill(); } }
+    for (const rx of [cx - dw*.12, cx + dw*.12]){ c.strokeStyle = o.stud || '#c9a24a'; c.lineWidth = 1.4; c.beginPath(); c.arc(rx, top + sideH*.45, dw*.05, 0, Math.PI*2); c.stroke(); }   // ring pulls
+  }
+  if (o.portcullis){
+    const py = top - r + (base - top + r)*o.portcullis;
+    c.strokeStyle = '#2e2d2a'; c.lineWidth = 2.2;
+    for (let x = dx + 3; x < dx + dw; x += dw/7){ c.beginPath(); c.moveTo(x, top - r); c.lineTo(x, py); c.stroke(); c.fillStyle = '#2e2d2a'; c.beginPath(); c.moveTo(x - 2, py); c.lineTo(x, py + 5); c.lineTo(x + 2, py); c.fill(); }
+    for (let y = top - r + 4; y < py; y += dw/7){ c.beginPath(); c.moveTo(dx, y); c.lineTo(dx + dw, y); c.stroke(); }
+  }
+  const sg = c.createLinearGradient(0, top - r, 0, top + r*.5); sg.addColorStop(0, 'rgba(0,0,0,.55)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = sg; c.fillRect(dx, top - r, dw, r*1.5);   // shadow under the arch
+  c.restore();
+  path(); c.strokeStyle = 'rgba(20,12,4,.6)'; c.lineWidth = 1.2; c.stroke();
+}
+// a torch in an iron bracket, with its glow on the wall
+function torch(c, x, y, s){
+  const g = c.createRadialGradient(x, y - s*1.3, 1, x, y - s*1.3, s*4); g.addColorStop(0, 'rgba(255,190,90,.45)'); g.addColorStop(1, 'rgba(255,140,40,0)');
+  c.fillStyle = g; c.fillRect(x - s*4, y - s*5.3, s*8, s*8);
+  c.fillStyle = '#2b2018'; c.fillRect(x - s*.6, y + s*.4, s*1.2, s*.5); c.fillRect(x - s*.18, y - s*.4, s*.36, s*1.6);
+  c.fillStyle = '#5a3a1c'; c.fillRect(x - s*.28, y - s*.9, s*.56, s*.9);
+  c.fillStyle = '#ff9a2e'; c.beginPath(); c.moveTo(x - s*.55, y - s*.9); c.quadraticCurveTo(x - s*.6, y - s*2.1, x, y - s*2.8); c.quadraticCurveTo(x + s*.6, y - s*2, x + s*.55, y - s*.9); c.fill();
+  c.fillStyle = '#ffe28a'; c.beginPath(); c.moveTo(x - s*.25, y - s*.95); c.quadraticCurveTo(x - s*.25, y - s*1.7, x, y - s*2.1); c.quadraticCurveTo(x + s*.25, y - s*1.6, x + s*.25, y - s*.95); c.fill();
+}
+// a window lit from within, with an arched or square head, a sill and mullions
+function litWindow(c, x, y, ww, wh, o = {}){
+  const path = () => { c.beginPath(); if (o.arch){ c.moveTo(x, y + wh); c.lineTo(x, y + ww/2); c.arc(x + ww/2, y + ww/2, ww/2, Math.PI, 0); c.lineTo(x + ww, y + wh); } else c.rect(x, y, ww, wh); c.closePath(); };
+  if (o.frame){ c.fillStyle = o.frame; c.fillRect(x - 2, y - 2, ww + 4, wh + 4); }
+  path(); const g = c.createLinearGradient(0, y, 0, y + wh); g.addColorStop(0, o.dark ? '#1a1410' : '#ffd38a'); g.addColorStop(1, o.dark ? '#0a0806' : '#c0621e'); c.fillStyle = g; c.fill();
+  c.strokeStyle = 'rgba(20,12,4,.7)'; c.lineWidth = 1.2; c.stroke();
+  if (o.mull){ c.strokeStyle = o.mull; c.lineWidth = 1.1; c.beginPath(); c.moveTo(x + ww/2, y + (o.arch ? ww*.2 : 0)); c.lineTo(x + ww/2, y + wh); c.moveTo(x, y + wh*.55); c.lineTo(x + ww, y + wh*.55); c.stroke(); }
+  c.fillStyle = 'rgba(255,245,220,.5)'; c.fillRect(x - 2, y + wh, ww + 4, 1.6);   // sill
 }
 function banner(c, x, y, w, h, team){
-  c.fillStyle = team.base; c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y); c.lineTo(x + w, y + h); c.lineTo(x + w/2, y + h*.86); c.lineTo(x, y + h); c.closePath(); c.fill();
+  c.fillStyle = '#2a1a0c'; c.fillRect(x - w*.12, y - 2, w*1.24, 3); circ(c, x - w*.12, y - .5, 1.6, '#c9a24a', 0); circ(c, x + w*1.12, y - .5, 1.6, '#c9a24a', 0);
+  const g = c.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, shade(team.base, .12)); g.addColorStop(.5, team.base); g.addColorStop(1, shade(team.base, -.25));
+  c.fillStyle = g; c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y); c.lineTo(x + w, y + h); c.lineTo(x + w/2, y + h*.86); c.lineTo(x, y + h); c.closePath(); c.fill();
   c.strokeStyle = '#e8c25a'; c.lineWidth = 1.2; c.stroke();
+  c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1; for (const fx of [.3, .7]){ c.beginPath(); c.moveTo(x + w*fx, y + 2); c.lineTo(x + w*fx, y + h*.9); c.stroke(); }   // folds
   c.fillStyle = '#e8c25a'; c.beginPath(); c.arc(x + w/2, y + h*.4, w*.22, 0, Math.PI*2); c.fill();
+  c.fillStyle = shade(team.base, -.2); c.beginPath(); c.arc(x + w/2, y + h*.4, w*.11, 0, Math.PI*2); c.fill();
 }
 function flag(c, x, y, h, team, wave){
-  c.strokeStyle = '#2a1a0c'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
-  c.fillStyle = team.base; c.beginPath(); c.moveTo(x, y - h); c.quadraticCurveTo(x + h*.25, y - h*1.02 + wave, x + h*.5, y - h*.93); c.lineTo(x + h*.5, y - h*.68); c.quadraticCurveTo(x + h*.25, y - h*.75 + wave, x, y - h*.7); c.fill();
+  c.strokeStyle = '#2a1a0c'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
+  c.strokeStyle = 'rgba(255,230,190,.3)'; c.lineWidth = .7; c.beginPath(); c.moveTo(x - .5, y); c.lineTo(x - .5, y - h); c.stroke();
+  circ(c, x, y - h - 1.5, 2.2, '#d8b04a', .5);
+  const g = c.createLinearGradient(x, 0, x + h*.5, 0); g.addColorStop(0, shade(team.base, -.15)); g.addColorStop(.45, shade(team.base, .12)); g.addColorStop(1, shade(team.base, -.2));
+  c.fillStyle = g; c.beginPath(); c.moveTo(x, y - h); c.quadraticCurveTo(x + h*.25, y - h*1.02 + wave, x + h*.5, y - h*.93); c.lineTo(x + h*.5, y - h*.68); c.quadraticCurveTo(x + h*.25, y - h*.75 + wave, x, y - h*.7); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = .8; c.stroke();
 }
 const FORTS = {
+  // Stone Age: a rocky hill with a cave, a log deck and a palisade of sharpened stakes, ochre handprints and a fire inside
   cave(c, w, h, team, R){
     const roof = h*(1 - FORT_ROOF.cave);
-    for (let k = 0; k < 22; k++){
-      const x = R()*w*.95, y = roof + h*.05 + Math.pow(R(), .8)*(h - roof), r = w*(.1 + R()*.13);
-      const g = c.createRadialGradient(x - r*.3, y - r*.4, 2, x, y, r); g.addColorStop(0, '#d8bb88'); g.addColorStop(1, '#7d5f3a');
-      c.fillStyle = g; c.beginPath(); c.ellipse(x, y, r, r*.85, R(), 0, Math.PI*2); c.fill();
-      c.strokeStyle = 'rgba(50,30,10,.35)'; c.lineWidth = 1; c.stroke();
+    const rock = (x, y, r, dark) => {
+      const g = c.createRadialGradient(x - r*.35, y - r*.45, r*.1, x, y, r*1.05);
+      g.addColorStop(0, dark ? '#b8a07a' : '#e6cfa2'); g.addColorStop(.55, dark ? '#8c7454' : '#b8996c'); g.addColorStop(1, dark ? '#5a4630' : '#6c5233');
+      c.fillStyle = g; c.beginPath(); c.ellipse(x, y, r, r*.8, (R() - .5)*.6, 0, Math.PI*2); c.fill();
+      c.strokeStyle = 'rgba(45,28,12,.55)'; c.lineWidth = 1.3; c.stroke();
+      c.strokeStyle = 'rgba(45,28,12,.32)'; c.lineWidth = .8; c.beginPath(); let cx = x + (R() - .5)*r*.6, cy = y - r*.35; c.moveTo(cx, cy); for (let j = 0; j < 3; j++){ cx += (R() - .5)*r*.3; cy += r*.18; c.lineTo(cx, cy); } c.stroke();
+      for (let j = 0; j < 5; j++){ c.fillStyle = R() < .5 ? 'rgba(110,140,60,.35)' : 'rgba(255,245,220,.22)'; c.beginPath(); c.arc(x + (R() - .5)*r, y - R()*r*.6, .8 + R()*1.8, 0, Math.PI*2); c.fill(); }
+    };
+    for (let k = 0; k < 12; k++) rock(w*.03 + R()*w*.88, roof + h*.08 + R()*(h - roof)*.5, w*(.09 + R()*.08), true);
+    for (let k = 0; k < 16; k++) rock(R()*w*.93, roof + h*.18 + Math.pow(R(), .7)*(h - roof - h*.16), w*(.08 + R()*.12), false);
+    for (let k = 0; k < 14; k++){ c.fillStyle = k % 2 ? 'rgba(90,130,50,.6)' : 'rgba(130,170,70,.55)'; c.beginPath(); c.ellipse(w*.05 + R()*w*.82, roof + h*(.06 + R()*.06), w*(.02 + R()*.03), h*.012, 0, 0, Math.PI*2); c.fill(); }   // moss and grass on top
+    for (let k = 0; k < 3; k++){   // ochre handprints in the team's colour
+      const x = w*(.14 + k*.13), y = roof + h*(.22 + R()*.12), s = w*.016; c.fillStyle = team.base + 'aa';
+      c.beginPath(); c.ellipse(x, y, s, s*1.15, 0, 0, Math.PI*2); c.fill();
+      for (let f = 0; f < 5; f++){ const a = -Math.PI*.95 + f*.42; c.beginPath(); c.ellipse(x + Math.cos(a)*s*1.6, y + Math.sin(a)*s*1.6, s*.32, s*.75, a + Math.PI/2, 0, Math.PI*2); c.fill(); }
     }
-    c.fillStyle = vgrad(c, h*.55, h, '#0d0805', '#2b1a0e'); c.beginPath(); c.ellipse(w*.74, h, w*.17, h*.3, 0, Math.PI, 0); c.fill();
-    c.fillStyle = WOOD; c.fillRect(w*.04, roof - 3, w*.86, 5);
-    for (let x = w*.06; x < w*.88; x += w*.07){ c.fillStyle = '#8a6038'; c.beginPath(); c.moveTo(x, roof - 2); c.lineTo(x + w*.025, roof - h*.09); c.lineTo(x + w*.05, roof - 2); c.fill(); }
-    c.strokeStyle = '#2a1a0c'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(w*.1, roof); c.lineTo(w*.1, roof - h*.3); c.stroke();
-    c.fillStyle = team.base; c.beginPath(); c.moveTo(w*.1, roof - h*.3); c.lineTo(w*.3, roof - h*.26); c.lineTo(w*.26, roof - h*.2); c.lineTo(w*.1, roof - h*.18); c.fill();
+    const mx = w*.74, mw = w*.17, mh = h*.3;   // the cave mouth, where attackers strike
+    for (let a = Math.PI; a <= Math.PI*2.001; a += .3) rock(mx + Math.cos(a)*mw*1.05, h + Math.sin(a)*mh*1.05, w*.035, true);
+    c.save(); c.beginPath(); c.ellipse(mx, h, mw, mh, 0, Math.PI, 0); c.closePath(); c.fillStyle = vgrad(c, h - mh, h, '#050302', '#24150a'); c.fill(); c.clip();
+    const fg = c.createRadialGradient(mx, h - 4, 2, mx, h - 4, mw*1.1); fg.addColorStop(0, 'rgba(255,150,50,.75)'); fg.addColorStop(1, 'rgba(255,90,20,0)'); c.fillStyle = fg; c.fillRect(mx - mw, h - mh, mw*2, mh);
+    for (let k = -1; k <= 1; k++){ c.fillStyle = '#ff9a2e'; c.beginPath(); c.moveTo(mx + k*6 - 5, h); c.quadraticCurveTo(mx + k*6 - 4, h - 10, mx + k*6, h - 15 - (k === 0 ? 5 : 0)); c.quadraticCurveTo(mx + k*6 + 4, h - 8, mx + k*6 + 5, h); c.fill(); }
+    c.fillStyle = '#ffe28a'; c.beginPath(); c.ellipse(mx, h - 4, 4, 6, 0, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#7a5530'; c.beginPath(); c.moveTo(mx - mw, h - mh*.2); c.quadraticCurveTo(mx - mw*.7, h - mh, mx - mw*.15, h - mh*.98); c.lineTo(mx - mw*.3, h - mh*.3); c.quadraticCurveTo(mx - mw*.45, h - mh*.05, mx - mw*.55, h); c.lineTo(mx - mw, h); c.fill();   // a hide hung across half the mouth
+    c.strokeStyle = 'rgba(40,24,10,.5)'; c.setLineDash([2, 2]); c.lineWidth = .8; c.beginPath(); c.moveTo(mx - mw*.2, h - mh*.9); c.lineTo(mx - mw*.42, h - mh*.15); c.stroke(); c.setLineDash([]);
+    c.restore();
+    c.fillStyle = '#efe6d2'; c.beginPath(); c.ellipse(mx + mw*1.15, h - 4, 4, 3.4, 0, 0, Math.PI*2); c.fill(); c.fillStyle = '#2a1a0c'; c.fillRect(mx + mw*1.15 - 2.2, h - 5, 1.6, 1.6); c.fillRect(mx + mw*1.15 + .6, h - 5, 1.6, 1.6);   // a skull by the entrance
+    // the log deck the defenders stand on, and the palisade behind them
+    for (let x = w*.06; x < w*.88; x += w*.065){
+      const sh = h*(.08 + R()*.03), sw = w*.042;
+      const g = c.createLinearGradient(x, 0, x + sw, 0); g.addColorStop(0, '#a87a4a'); g.addColorStop(1, '#5c3c1e');
+      c.fillStyle = g; c.beginPath(); c.moveTo(x, roof); c.lineTo(x, roof - sh); c.lineTo(x + sw/2, roof - sh - h*.035); c.lineTo(x + sw, roof - sh); c.lineTo(x + sw, roof); c.fill();
+      c.strokeStyle = 'rgba(40,24,10,.6)'; c.lineWidth = .9; c.stroke();
+      c.strokeStyle = '#c9b48a'; c.lineWidth = 1.1; c.beginPath(); c.moveTo(x, roof - sh*.45); c.lineTo(x + sw, roof - sh*.55); c.stroke();   // rope lashing
+    }
+    c.fillStyle = vgrad(c, roof - 4, roof + 5, '#a07448', '#5c3c1e'); c.fillRect(w*.03, roof - 4, w*.88, 8);
+    c.strokeStyle = 'rgba(40,24,10,.45)'; c.lineWidth = .7; for (let x = w*.05; x < w*.9; x += 9){ c.beginPath(); c.moveTo(x, roof - 2); c.lineTo(x + 5, roof - 1); c.stroke(); }
+    for (const ex of [w*.03, w*.91]){ circ(c, ex, roof, 4.2, '#c69a62', .8); c.strokeStyle = 'rgba(90,60,30,.6)'; c.lineWidth = .6; c.beginPath(); c.arc(ex, roof, 2.2, 0, Math.PI*2); c.stroke(); }
+    c.strokeStyle = '#2a1a0c'; c.lineWidth = 2; c.beginPath(); c.moveTo(w*.1, roof); c.lineTo(w*.1, roof - h*.32); c.stroke();
+    c.fillStyle = team.base; c.beginPath(); c.moveTo(w*.1, roof - h*.32); c.lineTo(w*.3, roof - h*.28); c.lineTo(w*.25, roof - h*.24); c.lineTo(w*.29, roof - h*.2); c.lineTo(w*.1, roof - h*.19); c.fill(); c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = .8; c.stroke();
+    c.fillStyle = '#efe6d2'; c.beginPath(); c.ellipse(w*.1, roof - h*.34, 4, 3.4, 0, 0, Math.PI*2); c.fill();
   },
+  // Bronze and Iron Age: a mudbrick palace on a stepped plinth, with pilasters, a painted frieze, cedar beam ends,
+  // stepped battlements, awninged windows and a columned gate with bronze-studded cedar doors
   palace(c, w, h, team, R){
-    const roof = h*(1 - FORT_ROOF.palace);
-    blocks(c, 0, roof, w*.95, h - roof, h*.055, w*.13, R, 40, 50, 60, 72);
-    c.fillStyle = vgrad(c, 0, 0, 'rgba(0,0,0,0)', 'rgba(0,0,0,0)');
-    const sg = c.createLinearGradient(w*.75, 0, w*.95, 0); sg.addColorStop(0, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(60,30,10,.35)'); c.fillStyle = sg; c.fillRect(w*.75, roof, w*.2, h - roof);
-    for (let x = 0; x < w*.95; x += w*.1){ c.fillStyle = '#d9b97a'; c.fillRect(x, roof - h*.04, w*.06, h*.04); }
-    for (let k = 0; k < 2; k++){
-      const wx = w*(.08 + .3*k), wy = roof + h*.1, ww = w*.2, wh = h*.2;
-      c.fillStyle = '#20150d'; c.fillRect(wx, wy, ww, wh);
-      for (let st = 0; st < 5; st++){ c.fillStyle = st % 2 ? '#f3ecd9' : team.base; c.beginPath(); c.moveTo(wx + st*ww/5 - 2, wy - 2); c.lineTo(wx + (st + 1)*ww/5 + 2, wy - 2); c.lineTo(wx + (st + 1)*ww/5 + 4, wy + wh*.45); c.lineTo(wx + st*ww/5, wy + wh*.45); c.fill(); }
-      c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(wx, wy + wh*.45, ww + 4, 3);
+    const roof = h*(1 - FORT_ROOF.palace), W = w*.95;
+    masonry(c, 0, roof, W, h - roof, h*.045, w*.11, R, {hue:36, sat:46, lo:56, hi:68, mortar:'#7a6240'});
+    masonry(c, 0, h*.92, w*.985, h*.08, h*.04, w*.16, R, {hue:38, sat:30, lo:70, hi:80, mortar:'#8a7350'});
+    for (const px of [.03, .33, .6]){   // pilasters standing proud of the wall
+      const x = w*px, pw = w*.04, top = roof + h*.085;
+      c.fillStyle = vgrad(c, top, h*.92, '#e2c690', '#b89462'); c.fillRect(x, top, pw, h*.92 - top);
+      c.fillStyle = 'rgba(255,250,230,.35)'; c.fillRect(x, top, 1.5, h*.92 - top); c.fillStyle = 'rgba(40,20,0,.3)'; c.fillRect(x + pw - 2, top, 2, h*.92 - top);
+      c.fillStyle = '#efd7a4'; c.fillRect(x - 2, top - 3, pw + 4, 4);
     }
-    banner(c, w*.62, roof + h*.02, w*.1, h*.24, team);
-    const dw = w*.22, dx = w*.7;
-    c.fillStyle = vgrad(c, h*.6, h, '#120a06', '#3a2414'); c.beginPath(); c.moveTo(dx, h); c.lineTo(dx, h - h*.24); c.arc(dx + dw/2, h - h*.24, dw/2, Math.PI, 0); c.lineTo(dx + dw, h); c.fill();
-    flag(c, w*.1, roof - h*.04, h*.3, team, 2);
+    lightFace(c, 0, roof, W, h - roof);
+    c.fillStyle = shade(team.base, -.1); c.fillRect(0, roof + h*.015, W, h*.04);   // the painted frieze
+    c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(0, roof + h*.015, W, 1.2); c.fillRect(0, roof + h*.055 - 1.2, W, 1.2);
+    for (let x = w*.03; x < W; x += w*.055){ circ(c, x, roof + h*.035, h*.012, '#f0cf6a', .4); circ(c, x, roof + h*.035, h*.005, shade(team.base, -.3), 0); }
+    for (let x = w*.02; x < W; x += w*.045){ c.fillStyle = '#4a2e18'; c.fillRect(x, roof + h*.066, w*.016, w*.016); c.fillStyle = 'rgba(255,230,190,.25)'; c.fillRect(x, roof + h*.066, w*.016, 1); }   // cedar beam ends
+    merlons(c, 0, W, roof, w*.065, h*.03, w*.1, '#d9bd84', '#b8975e', true);
+    for (let k = 0; k < 2; k++){   // windows under striped awnings, warm light inside
+      const wx = w*(.09 + .3*k), wy = roof + h*.12, ww = w*.16, wh = h*.17;
+      litWindow(c, wx, wy, ww, wh, {arch:true, frame:'#c9a76c', mull:'#3a2414'});
+      for (let st = 0; st < 5; st++){ c.fillStyle = st % 2 ? '#f3ecd9' : team.base; c.beginPath(); c.moveTo(wx + st*ww/5 - 3, wy - 4); c.lineTo(wx + (st + 1)*ww/5 + 3, wy - 4); c.lineTo(wx + (st + 1)*ww/5 + 5, wy + wh*.32); c.lineTo(wx + st*ww/5 + 1, wy + wh*.32); c.fill(); }
+      for (let st = 0; st < 5; st++){ c.fillStyle = st % 2 ? '#f3ecd9' : team.base; c.beginPath(); c.arc(wx + st*ww/5 + ww/10 + 3, wy + wh*.32, ww/10, 0, Math.PI); c.fill(); }   // scalloped edge
+      c.fillStyle = 'rgba(0,0,0,.22)'; c.fillRect(wx, wy + wh*.32 + ww/10, ww + 6, 3);
+    }
+    banner(c, w*.47, roof + h*.1, w*.09, h*.22, team);
+    const dw = w*.2, dx = w*.71;
+    for (const cx of [dx - dw*.32, dx + dw*1.16]){   // columns flanking the gate
+      c.fillStyle = vgrad(c, h*.6, h*.92, '#f0dcaa', '#c9a870'); c.fillRect(cx, h*.62, dw*.16, h*.3);
+      c.fillStyle = 'rgba(0,0,0,.18)'; for (let f = 1; f < 4; f++) c.fillRect(cx + f*dw*.04, h*.63, 1, h*.28);
+      c.fillStyle = '#e8cf96'; c.fillRect(cx - 2, h*.6, dw*.16 + 4, h*.025); c.fillStyle = '#f0cf6a'; c.fillRect(cx - 2, h*.6, dw*.16 + 4, 1.5);
+    }
+    gateway(c, dx, dw, h*.92, h*.2, {stone:['#e6cc96', '#cdb07a', '#f0cf6a'], wood:'#7a4a24', stud:'#e0b04a', iron:'#6a4a22'});
+    flag(c, w*.1, roof - h*.06, h*.3, team, 2);
   },
-  castle(c, w, h, team, R){
-    const roof = h*(1 - FORT_ROOF.castle), tw = w*.32;
-    blocks(c, 0, roof, w*.95, h - roof, h*.05, w*.11, R, 30, 6, 52, 64);
-    blocks(c, 0, h*.08, tw, roof - h*.08, h*.05, w*.11, R, 30, 6, 56, 68);
-    for (let x = 0; x < w*.95; x += w*.09){ c.fillStyle = '#8f8d88'; c.fillRect(x, roof - h*.045, w*.055, h*.045); }
-    c.fillStyle = team.base; c.beginPath(); c.moveTo(-w*.02, h*.08); c.lineTo(tw/2, -h*.04); c.lineTo(tw + w*.02, h*.08); c.fill(); c.strokeStyle = OUT; c.lineWidth = 1; c.stroke();
-    for (const [x, y] of [[tw*.45, h*.2], [tw*.45, h*.36], [w*.5, roof + h*.1]]){ c.fillStyle = '#1a1410'; c.fillRect(x, y, w*.025, h*.07); }
-    banner(c, w*.42, roof + h*.04, w*.1, h*.22, team);
-    const dw = w*.2, dx = w*.72;
-    c.fillStyle = '#120d09'; c.beginPath(); c.moveTo(dx, h); c.lineTo(dx, h - h*.22); c.arc(dx + dw/2, h - h*.22, dw/2, Math.PI, 0); c.lineTo(dx + dw, h); c.fill();
-    c.strokeStyle = '#4a4a46'; c.lineWidth = 1.2; for (let x = dx + 3; x < dx + dw; x += 4){ c.beginPath(); c.moveTo(x, h - h*.3); c.lineTo(x, h - h*.06); c.stroke(); }
-    for (let y = h - h*.28; y < h - h*.06; y += 4){ c.beginPath(); c.moveTo(dx, y); c.lineTo(dx + dw, y); c.stroke(); }
-    flag(c, tw/2, -h*.03, h*.14, team, 1);
+  // Medieval and Renaissance: a stone curtain wall on a battered plinth, a round-roofed keep with machicolations and
+  // arrow slits, a gatehouse with a half-raised portcullis, torches, lit windows and ivy
+  castle(c, w, h, team, R, age){
+    const roof = h*(1 - FORT_ROOF.castle), tw = w*.32, W = w*.95;
+    masonry(c, 0, h*.08, tw, roof - h*.08, h*.05, w*.1, R, {hue:30, sat:7, lo:56, hi:68, mortar:'#5c5852', moss:.2});
+    lightFace(c, 0, h*.08, tw, roof - h*.08, .8);
+    for (let x = 0; x < tw; x += tw/6){ c.fillStyle = '#7d7a74'; c.beginPath(); c.moveTo(x + 2, h*.08); c.lineTo(x + tw/6 - 2, h*.08); c.lineTo(x + tw/12, h*.08 + h*.035); c.fill(); c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = .7; c.stroke(); }   // corbels under the parapet
+    c.fillStyle = '#9a978f'; c.fillRect(-2, h*.06, tw + 4, h*.025);
+    const rg = c.createLinearGradient(0, 0, tw, 0); rg.addColorStop(0, shade(team.base, .1)); rg.addColorStop(.5, team.base); rg.addColorStop(1, shade(team.base, -.3));
+    c.fillStyle = rg; c.beginPath(); c.moveTo(-w*.02, h*.065); c.lineTo(tw/2, -h*.05); c.lineTo(tw + w*.02, h*.065); c.closePath(); c.fill(); c.strokeStyle = OUT; c.lineWidth = 1; c.stroke();
+    c.strokeStyle = 'rgba(0,0,0,.22)'; c.lineWidth = .8; for (let k = 1; k < 5; k++){ const y = -h*.05 + k*h*.023; const half = (tw/2 + w*.02)*(k/5); c.beginPath(); c.moveTo(tw/2 - half, y); c.lineTo(tw/2 + half, y); c.stroke(); }   // shingle courses
+    for (const [x, y] of [[tw*.45, h*.17], [tw*.45, h*.32]]){ c.fillStyle = '#15100c'; c.fillRect(x, y, w*.018, h*.07); c.fillRect(x - w*.012, y + h*.025, w*.042, h*.013); }   // cross-shaped arrow slits
+    masonry(c, 0, roof, W, h - roof, h*.05, w*.11, R, {hue:30, sat:6, lo:50, hi:63, mortar:'#55514b', moss:.35});
+    c.fillStyle = vgrad(c, h*.86, h, '#6d6a63', '#4e4b45'); c.beginPath(); c.moveTo(0, h*.88); c.lineTo(W, h*.88); c.lineTo(W + w*.03, h); c.lineTo(0, h); c.fill();   // battered plinth
+    c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(0, h*.88, W, 1.2);
+    lightFace(c, 0, roof, W, h*.88 - roof);
+    merlons(c, tw, W, roof, w*.055, h*.045, w*.09, '#8f8c85', '#77746d', false);
+    for (const [x, y] of [[w*.38, roof + h*.1], [w*.52, roof + h*.1]]) litWindow(c, x, y, w*.035, h*.07, {arch:true, mull:'#2a2620'});
+    if (age >= 4) litWindow(c, w*.06, roof + h*.12, w*.05, h*.08, {mull:'#2a2620', frame:'#a9a59c'});
+    for (let k = 0; k < 9; k++){ const x = w*(.02 + R()*.5), y = roof + h*(.15 + R()*.3); c.fillStyle = `rgba(${60 + R()*30},${110 + R()*40},50,.7)`; for (let j = 0; j < 6; j++){ c.beginPath(); c.arc(x + (R() - .5)*w*.04, y + j*h*.02, 1.6 + R()*1.8, 0, Math.PI*2); c.fill(); } }   // ivy
+    banner(c, w*.44, roof + h*.04, w*.08, h*.2, team);
+    const dw = w*.18, dx = w*.72;
+    gateway(c, dx, dw, h*.94, h*.2, {stone:['#9d9a92', '#85827a', '#b0aca2'], wood:'#6a4a2a', iron:'#2e2d2a', stud:'#8a8984', portcullis:.45});
+    torch(c, dx - dw*.32, h*.72, w*.012); torch(c, dx + dw*1.32, h*.72, w*.012);
+    flag(c, tw/2, -h*.045, h*.13, team, 1);
   },
+  // Imperial and Industrial: a brick bastion on a grassy glacis, stone quoins and a rounded cordon, casemates with cannon,
+  // a sentry box on the salient and a rusticated gate under a pediment
   star(c, w, h, team, R){
-    const roof = h*(1 - FORT_ROOF.star);
-    c.fillStyle = vgrad(c, h*.7, h, '#7d8a45', '#56602c'); c.beginPath(); c.moveTo(0, h); c.lineTo(w*.6, h); c.lineTo(w*1.02, h); c.lineTo(w*.8, h*.78); c.lineTo(0, h*.78); c.fill();
-    blocks(c, 0, roof, w*.85, h*.8 - roof, h*.035, w*.07, R, 14, 45, 36, 46);
-    c.fillStyle = vgrad(c, roof, h*.8, '#a8573a', '#7a3a22'); c.beginPath(); c.moveTo(w*.85, roof); c.lineTo(w*.97, roof + h*.06); c.lineTo(w*.97, h*.8); c.lineTo(w*.85, h*.8); c.fill();
-    c.fillStyle = '#d8c7a8'; c.fillRect(0, roof - h*.03, w*.97, h*.03);
-    for (let x = w*.1; x < w*.85; x += w*.2){ c.fillStyle = '#1a0f0a'; c.fillRect(x, roof + h*.08, w*.06, h*.05); }
-    const dw = w*.18, dx = w*.6;
-    c.fillStyle = '#140c08'; c.beginPath(); c.moveTo(dx, h*.8); c.lineTo(dx, h*.8 - h*.16); c.arc(dx + dw/2, h*.8 - h*.16, dw/2, Math.PI, 0); c.lineTo(dx + dw, h*.8); c.fill();
-    flag(c, w*.15, roof - h*.03, h*.32, team, 2);
+    const roof = h*(1 - FORT_ROOF.star), W = w*.85;
+    c.fillStyle = vgrad(c, h*.74, h, '#7d8a45', '#4c5626'); c.beginPath(); c.moveTo(0, h); c.lineTo(w*1.02, h); c.lineTo(w*.82, h*.78); c.lineTo(0, h*.78); c.fill();   // the glacis
+    for (let k = 0; k < 90; k++){ const x = R()*w, y = h*.79 + R()*h*.2; if ((x - w*.82)/(w*.2) > (y - h*.78)/(h*.22)) continue; c.strokeStyle = R() < .5 ? 'rgba(150,170,80,.6)' : 'rgba(60,75,30,.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (R() - .5)*2, y - 2 - R()*3); c.stroke(); }
+    masonry(c, 0, roof, W, h*.8 - roof, h*.028, w*.055, R, {hue:12, sat:48, lo:34, hi:44, mortar:'#b49a80', gap:1.2});
+    for (let y = roof + h*.03, k = 0; y < h*.8; y += h*.045, k++){ c.fillStyle = k % 2 ? '#d6c6a6' : '#c8b796'; c.fillRect(W - (k % 2 ? w*.07 : w*.045), y, k % 2 ? w*.07 : w*.045, h*.04); c.fillStyle = 'rgba(255,255,255,.25)'; c.fillRect(W - (k % 2 ? w*.07 : w*.045), y, k % 2 ? w*.07 : w*.045, 1); }   // quoins
+    c.fillStyle = vgrad(c, roof, h*.8, '#a8573a', '#6c3220'); c.beginPath(); c.moveTo(W, roof); c.lineTo(w*.97, roof + h*.06); c.lineTo(w*.97, h*.8); c.lineTo(W, h*.8); c.fill();   // the bastion's angled face
+    lightFace(c, 0, roof, W, h*.8 - roof);
+    c.fillStyle = vgrad(c, roof - h*.035, roof + h*.01, '#efe2c6', '#b8a684'); c.fillRect(0, roof - h*.035, w*.97, h*.045);   // rounded stone cordon
+    c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(0, roof - h*.035, w*.97, 1.2); c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(0, roof + h*.01, w*.97, 2);
+    for (let x = w*.1; x < w*.45; x += w*.2){   // casemates with cannon muzzles
+      const y = roof + h*.09; c.fillStyle = '#c8b796'; c.fillRect(x - 3, y - 3, w*.07 + 6, h*.06 + 6); c.fillStyle = '#140c08'; c.fillRect(x, y, w*.07, h*.06);
+      c.fillStyle = '#2a2a2a'; c.beginPath(); c.ellipse(x + w*.035, y + h*.035, w*.018, h*.016, 0, 0, Math.PI*2); c.fill(); c.fillStyle = '#000'; c.beginPath(); c.ellipse(x + w*.038, y + h*.035, w*.009, h*.008, 0, 0, Math.PI*2); c.fill();
+    }
+    const gx = w*.86, gy = roof - h*.035;   // sentry box on the salient
+    c.fillStyle = vgrad(c, gy - h*.09, gy, '#e4d4b2', '#b8a684'); c.fillRect(gx, gy - h*.08, w*.07, h*.08); c.fillStyle = '#1a120c'; c.fillRect(gx + w*.025, gy - h*.06, w*.02, h*.035);
+    c.fillStyle = '#9a8a6a'; c.beginPath(); c.arc(gx + w*.035, gy - h*.08, w*.04, Math.PI, 0); c.fill(); circ(c, gx + w*.035, gy - h*.08 - w*.04, 2, '#d8b04a', .4);
+    const dw = w*.17, dx = w*.6;
+    for (let y = h*.8, k = 0; y > h*.8 - h*.2; y -= h*.04, k++){ c.fillStyle = k % 2 ? '#d6c6a6' : '#c3b292'; c.fillRect(dx - dw*.2, y - h*.038, dw*1.4, h*.036); }   // rusticated surround
+    c.fillStyle = '#d6c6a6'; c.beginPath(); c.moveTo(dx - dw*.3, h*.8 - h*.21); c.lineTo(dx + dw/2, h*.8 - h*.3); c.lineTo(dx + dw*1.3, h*.8 - h*.21); c.fill(); c.strokeStyle = 'rgba(0,0,0,.3)'; c.lineWidth = 1; c.stroke();   // pediment
+    gateway(c, dx, dw, h*.8, h*.13, {stone:['#d6c6a6', '#c3b292', '#efe2c6'], wood:'#5a3a20', iron:'#2a2a2a', stud:'#9a9a9a'});
+    flag(c, w*.15, roof - h*.035, h*.34, team, 2);
   },
-  bunker(c, w, h, team, R){
-    const roof = h*(1 - FORT_ROOF.bunker);
-    c.fillStyle = vgrad(c, roof, h, '#a6a69e', '#6b6b64'); c.beginPath(); c.moveTo(0, roof + h*.04); c.lineTo(w*.8, roof + h*.04); c.lineTo(w, h); c.lineTo(0, h); c.fill();
-    for (let k = 0; k < 40; k++){ c.fillStyle = `rgba(0,0,0,${.04 + R()*.06})`; c.fillRect(R()*w*.8, roof + h*.05 + R()*(h - roof - h*.05), 2 + R()*6, 1 + R()*3); }
-    for (let x = w*.1; x < w*.75; x += w*.22){ c.fillStyle = '#141414'; c.fillRect(x, roof + h*.14, w*.13, h*.035); }
-    for (let row = 0; row < 2; row++) for (let x = row*w*.05; x < w*.8; x += w*.1){ const g = c.createRadialGradient(x + w*.04, roof - row*h*.035 + h*.01, 1, x + w*.05, roof - row*h*.035 + h*.02, w*.06); g.addColorStop(0, '#d6c49a'); g.addColorStop(1, '#8f7c55'); c.fillStyle = g; c.beginPath(); c.ellipse(x + w*.05, roof - row*h*.035 + h*.02, w*.055, h*.022, 0, 0, Math.PI*2); c.fill(); }
-    c.fillStyle = '#121212'; c.fillRect(w*.62, h - h*.2, w*.18, h*.2);
-    c.strokeStyle = '#2a2a2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(w*.3, roof - h*.05); c.lineTo(w*.3, roof - h*.3); c.stroke();
+  // World War and Modern: board-formed concrete with weather streaks, a sloped front, bevelled firing slits,
+  // two rows of sandbags, camouflage netting, a riveted blast door with hazard stripes, an antenna and barbed wire
+  bunker(c, w, h, team, R, age){
+    const roof = h*(1 - FORT_ROOF.bunker), top = roof + h*.04;
+    const body = () => { c.beginPath(); c.moveTo(0, top); c.lineTo(w*.8, top); c.lineTo(w, h); c.lineTo(0, h); c.closePath(); };
+    body(); c.fillStyle = vgrad(c, top, h, '#b0b0a8', '#74746c'); c.fill();
+    c.save(); body(); c.clip();
+    for (let y = top + 5; y < h; y += h*.028){ c.fillStyle = 'rgba(0,0,0,.07)'; c.fillRect(0, y, w, 1); c.fillStyle = 'rgba(255,255,255,.06)'; c.fillRect(0, y + 1, w, 1); }   // formwork boards
+    for (let k = 0; k < 40; k++){ c.fillStyle = `rgba(0,0,0,${.03 + R()*.06})`; c.fillRect(R()*w, top + R()*(h - top), 2 + R()*7, 1 + R()*3); }
+    for (let x = w*.1; x < w*.75; x += w*.22){ const g = c.createLinearGradient(0, top + h*.17, 0, h); g.addColorStop(0, 'rgba(40,35,25,.22)'); g.addColorStop(1, 'rgba(40,35,25,0)'); c.fillStyle = g; for (let j = 0; j < 5; j++) c.fillRect(x + w*.015 + j*w*.022 + R()*3, top + h*.17, 1.5 + R()*2, h*(.15 + R()*.25)); }   // rain streaks under the slits
+    lightFace(c, 0, top, w, h - top);
+    c.restore();
+    c.fillStyle = 'rgba(255,255,255,.3)'; c.fillRect(0, top, w*.8, 1.5);
+    for (let x = w*.1; x < w*.75; x += w*.22){   // firing slits with a bevelled lip and a gun barrel
+      const y = top + h*.1; c.fillStyle = '#c8c8c0'; c.beginPath(); c.moveTo(x - 4, y - 4); c.lineTo(x + w*.13 + 4, y - 4); c.lineTo(x + w*.13, y); c.lineTo(x, y); c.fill();
+      c.fillStyle = '#121212'; c.fillRect(x, y, w*.13, h*.035); c.fillStyle = '#2a2a2a'; c.fillRect(x + w*.09, y + h*.012, w*.07, h*.01);
+    }
+    for (let row = 0; row < 2; row++) for (let x = row*w*.05; x < w*.8; x += w*.1){   // sandbags
+      const cx = x + w*.05, cy = roof - row*h*.035 + h*.02, g = c.createRadialGradient(cx - w*.015, cy - h*.008, 1, cx, cy, w*.06);
+      g.addColorStop(0, '#dccaa0'); g.addColorStop(1, '#8a7650'); c.fillStyle = g; c.beginPath(); c.ellipse(cx, cy, w*.055, h*.022, 0, 0, Math.PI*2); c.fill();
+      c.strokeStyle = 'rgba(60,45,20,.6)'; c.lineWidth = .8; c.stroke(); c.beginPath(); c.moveTo(cx - w*.04, cy - h*.004); c.lineTo(cx + w*.04, cy - h*.004); c.strokeStyle = 'rgba(60,45,20,.3)'; c.stroke();
+    }
+    c.save(); c.globalAlpha = .85;   // camouflage netting over the back of the bunker
+    for (let k = 0; k < 26; k++){ c.fillStyle = ['#5a6a34', '#7a7a44', '#3e4a26', '#8a7a50'][k % 4]; c.beginPath(); c.ellipse(w*.02 + R()*w*.3, top + R()*h*.25, w*(.02 + R()*.03), h*(.012 + R()*.015), R(), 0, Math.PI*2); c.fill(); }
+    c.strokeStyle = 'rgba(30,30,20,.45)'; c.lineWidth = .6; for (let k = 0; k < 10; k++){ c.beginPath(); c.moveTo(w*.02 + k*w*.032, top - 2); c.lineTo(w*.02 + k*w*.032 + w*.04, top + h*.26); c.stroke(); c.beginPath(); c.moveTo(w*.34 - k*w*.032, top - 2); c.lineTo(w*.3 - k*w*.032, top + h*.26); c.stroke(); }
+    c.restore();
+    const dx = w*.6, dw = w*.2, dy = h - h*.22;   // the blast door
+    for (let k = 0; k < 10; k++){ c.fillStyle = k % 2 ? '#1a1a1a' : '#e8c22a'; c.beginPath(); c.moveTo(dx - 6 + k*(dw + 12)/10, dy - 6); c.lineTo(dx - 6 + (k + 1)*(dw + 12)/10, dy - 6); c.lineTo(dx - 6 + (k + .5)*(dw + 12)/10, dy); c.lineTo(dx - 6 + (k - .5)*(dw + 12)/10, dy); c.fill(); }
+    c.fillStyle = '#3a3c3a'; c.fillRect(dx - 6, dy - 6, 6, h - dy + 6); c.fillRect(dx + dw, dy - 6, 6, h - dy + 6);
+    c.fillStyle = vgrad(c, dy, h, '#5c605c', '#3a3d3a'); c.fillRect(dx, dy, dw, h - dy);
+    c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 1; c.strokeRect(dx + 3, dy + 3, dw - 6, h - dy - 3); c.beginPath(); c.moveTo(dx + dw/2, dy); c.lineTo(dx + dw/2, h); c.stroke();
+    for (let y = dy + 6; y < h - 3; y += 8) for (const x of [dx + 5, dx + dw/2 - 4, dx + dw/2 + 4, dx + dw - 5]) circ(c, x, y, 1, '#8a8e8a', 0);   // rivets
+    c.fillStyle = '#ffe9a0'; c.beginPath(); c.arc(dx + dw/2, dy - 12, 3, 0, Math.PI*2); c.fill();
+    const lg = c.createRadialGradient(dx + dw/2, dy - 12, 1, dx + dw/2, dy - 12, w*.08); lg.addColorStop(0, 'rgba(255,230,150,.45)'); lg.addColorStop(1, 'rgba(255,230,150,0)'); c.fillStyle = lg; c.fillRect(dx - w*.05, dy - w*.1, dw + w*.1, w*.16);
+    c.strokeStyle = '#2a2a2a'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(w*.3, roof - h*.05); c.lineTo(w*.3, roof - h*.32); c.stroke();   // antenna and guy wire
+    c.strokeStyle = 'rgba(40,40,40,.5)'; c.lineWidth = .6; c.beginPath(); c.moveTo(w*.3, roof - h*.3); c.lineTo(w*.38, roof - h*.04); c.stroke();
+    if (age >= 8){ c.fillStyle = '#c8ccd0'; c.beginPath(); c.ellipse(w*.48, roof - h*.1, w*.04, h*.025, -.5, 0, Math.PI*2); c.fill(); c.strokeStyle = '#555'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(w*.48, roof - h*.1); c.lineTo(w*.48, roof - h*.04); c.stroke(); }   // a radar dish
+    c.strokeStyle = 'rgba(60,60,60,.75)'; c.lineWidth = .7; for (let x = w*.02; x < w*.55; x += 5){ c.beginPath(); c.ellipse(x, h - h*.025, 3.5, h*.022, 0, 0, Math.PI*2); c.stroke(); }   // barbed wire
     flag(c, w*.12, roof - h*.04, h*.28, team, 2);
   },
+  // Future: sleek armoured panels with seams, glowing strips in the team's colour, a lit window band, an emitter tower
+  // with a glowing orb, a door framed in light and the shimmer of an energy shield
   citadel(c, w, h, team, R){
     const roof = h*(1 - FORT_ROOF.citadel);
-    c.fillStyle = vgrad(c, roof, h, '#eef2f6', '#a9b3bf'); c.beginPath(); c.moveTo(0, roof); c.lineTo(w*.82, roof); c.lineTo(w*.98, h); c.lineTo(0, h); c.fill();
-    c.fillStyle = vgrad(c, h*.05, roof, '#f6f8fb', '#bcc5d0'); c.fillRect(w*.1, h*.1, w*.26, roof - h*.1);
+    const body = () => { c.beginPath(); c.moveTo(0, roof); c.lineTo(w*.82, roof); c.lineTo(w*.98, h); c.lineTo(0, h); c.closePath(); };
+    body(); const bg = c.createLinearGradient(0, roof, w, h); bg.addColorStop(0, '#f4f7fa'); bg.addColorStop(.6, '#c4ccd6'); bg.addColorStop(1, '#8e98a6'); c.fillStyle = bg; c.fill();
+    c.save(); body(); c.clip();
+    c.strokeStyle = 'rgba(60,70,90,.3)'; c.lineWidth = 1;
+    for (let y = roof + h*.12; y < h; y += h*.1){ c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    for (let x = w*.12; x < w; x += w*.14){ c.beginPath(); c.moveTo(x, roof); c.lineTo(x + w*.02, h); c.stroke(); }
+    c.fillStyle = 'rgba(255,255,255,.35)'; for (let y = roof + h*.12; y < h; y += h*.1) c.fillRect(0, y + 1, w, 1);
+    for (let x = w*.06; x < w*.75; x += w*.08){ c.fillStyle = '#1a2230'; c.fillRect(x, roof + h*.15, w*.05, h*.045); c.fillStyle = team.hi + '99'; c.fillRect(x + 1, roof + h*.15 + 1, w*.05 - 2, h*.045 - 2); c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(x + 1, roof + h*.15 + 1, w*.02, 1.5); }   // the window band
+    lightFace(c, 0, roof, w, h - roof, .7);
+    c.restore();
+    c.fillStyle = vgrad(c, h*.05, roof, '#fafcfe', '#b6c0cc'); c.fillRect(w*.1, h*.1, w*.26, roof - h*.1);   // the emitter tower
     c.beginPath(); c.arc(w*.23, h*.1, w*.13, Math.PI, 0); c.fill();
-    c.strokeStyle = team.hi; c.lineWidth = 2; c.shadowColor = team.hi; c.shadowBlur = 8;
+    c.fillStyle = 'rgba(0,0,0,.12)'; c.fillRect(w*.3, h*.1, w*.06, roof - h*.1);
+    c.strokeStyle = 'rgba(60,70,90,.3)'; c.lineWidth = 1; for (let y = h*.18; y < roof; y += h*.07){ c.beginPath(); c.moveTo(w*.1, y); c.lineTo(w*.36, y); c.stroke(); }
+    c.shadowColor = team.hi; c.shadowBlur = 10; c.strokeStyle = team.hi; c.lineWidth = 2.2;
     c.beginPath(); c.moveTo(0, roof + h*.08); c.lineTo(w*.84, roof + h*.08); c.stroke();
     c.beginPath(); c.moveTo(w*.23, h*.1); c.lineTo(w*.23, roof); c.stroke();
+    c.fillStyle = team.hi; c.beginPath(); c.arc(w*.23, h*.02, w*.035, 0, Math.PI*2); c.fill();   // the glowing orb on the emitter
     c.shadowBlur = 0;
-    c.fillStyle = team.base; c.fillRect(w*.66, h - h*.24, w*.16, h*.24);
-    c.fillStyle = 'rgba(255,255,255,.3)'; c.fillRect(w*.66, h - h*.24, w*.16, 2);
+    c.fillStyle = '#e8eef4'; c.beginPath(); c.arc(w*.23, h*.02, w*.014, 0, Math.PI*2); c.fill();
+    c.strokeStyle = '#8e98a6'; c.lineWidth = 2; c.beginPath(); c.moveTo(w*.23, h*.055); c.lineTo(w*.23, h*.1 - w*.13); c.stroke();
+    const dx = w*.66, dw = w*.16, dy = h - h*.24;
+    c.fillStyle = vgrad(c, dy, h, shade(team.base, -.1), shade(team.base, -.4)); c.fillRect(dx, dy, dw, h - dy);
+    c.fillStyle = 'rgba(255,255,255,.3)'; c.fillRect(dx, dy, dw, 2); c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(dx + dw/2 - .5, dy, 1, h - dy);
+    c.shadowColor = team.hi; c.shadowBlur = 8; c.strokeStyle = team.hi; c.lineWidth = 1.6; c.strokeRect(dx - 2, dy - 2, dw + 4, h - dy + 2); c.shadowBlur = 0;
     c.strokeStyle = team.hi + '66'; c.lineWidth = 3; c.beginPath(); c.arc(w*.5, h, w*.62, Math.PI*1.08, Math.PI*1.92); c.stroke();
+    c.strokeStyle = team.hi + '22'; c.lineWidth = 9; c.beginPath(); c.arc(w*.5, h, w*.62, Math.PI*1.08, Math.PI*1.92); c.stroke();
   }
 };
 function renderFort(s, i){
@@ -3213,7 +3423,7 @@ function renderFort(s, i){
   const w = FORT*ppw*1.25, h = fortH(), sc = Math.min(dpr, 2);
   const [fc, c] = mk(w, h, sc);
   c.save(); if (s === 1){ c.translate(w, 0); c.scale(-1, 1); }
-  FORTS[style](c, w, h, team, rng(7 + age*13 + s*3 + i*29));
+  FORTS[style](c, w, h, team, rng(7 + age*13 + s*3 + i*29), age);
   if (sd.civ) civFort(c, w, h, sd.civ, team, h*(1 - FORT_ROOF[style]), age);
   c.restore();
   if (!sd.alive){   // a fallen fortress: scorched, broken open, rubble at its foot

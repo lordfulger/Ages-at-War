@@ -35,6 +35,7 @@ All the updates to Ages at War, newest first.
 - More realistic effects: layered gunfire, ringing steel, plucked bows, real explosions and engines.
 
 ### Graphics
+- All six fortresses redrawn: sunlit masonry with mortar, chips and moss, proper gates (stone arches, studded doors, a portcullis, a riveted blast door), torches and lit windows, plus period details: a palisade and cave fire, a painted frieze and stepped battlements, a cone-roofed keep with ivy, a brick bastion with cannon and a sentry box, a bunker with camo netting and barbed wire, and a glowing future citadel.
 - Better troop art: faces, hands, a proper stride, shading, and more detailed mounts and machines.
 
 ### Online and lobby
