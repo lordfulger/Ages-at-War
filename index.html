@@ -2650,7 +2650,8 @@ function update(dt){
         const n = defenders(s, i);
         if (best){
           sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % n; sd.defAt = S.t;   // they take turns evenly
-          fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK % n, n), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
+          const [mx, mh] = defMuzzle(s, i, sd.defK % n, n);
+          fire(s, STATS[sd.age].rng.proj, mx, .5, mh, 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
         } else sd.defT = .2;
       }
     });
@@ -2782,8 +2783,12 @@ const scaleK = z => fh*.0064*(.86 + .28*z);
 const FORT_BASE = () => fh*.86;
 const FORT_ROOF = {cave:.6, palace:.64, castle:.6, star:.56, bunker:.56, citadel:.62};
 const fortH = () => fh*.7;
-// height of a wall defender's hands above the lane, so their shots leave from the soldier and not the wall
-function fortRoofH(s, i){ return (laneY(.5) - (FORT_BASE() - fortH()*FORT_ROOF[AGES[S.sides[s].seats[i].age].fort]))/fh + 20*scaleK(.4)*.85/fh; }
+// where a wall defender's shot leaves: the barrel, bow or throwing hand of the defender as drawn on the roof (same scale as drawFort uses)
+function defMuzzle(s, i, k, n){
+  const sd = S.sides[s].seats[i], m = MUZZLE_W[STATS[sd.age].rng.d.w] || [10, -20], kk = scaleK(.4)*.85;
+  const roof = (laneY(.5) - (FORT_BASE() - fortH()*FORT_ROOF[AGES[sd.age].fort]))/fh;
+  return [defX(s, i, k, n) + dirOf(s)*m[0]*kk/ppw, roof - m[1]*kk/fh];
+}
 // wall defenders stand a tenth of a fortress apart, closing up when the garrison grows past seven so they all fit on the wall
 const defX = (s, i, k, n = 7) => { const o = .16 + k*Math.min(.1, .6/Math.max(1, n - 1)); return s === 0 ? FORT*(i + o) : L - FORT*(i + o); };
 function layout(){
