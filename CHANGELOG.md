@@ -11,6 +11,7 @@ All the updates to Ages at War, newest first.
 - The battlefield preview in battle setup looks the same on phones as on PC, instead of zoomed in.
 
 ### Troops and combat
+- Fortresses always mend slowly, even under attack and in the Future age, and faster once the walls have been quiet. The 25-minute overtime that crumbled the front fortresses is gone.
 - Wall defenders' shots leave from their weapons (barrel, bow or throwing hand) instead of from the middle of their bodies.
 - Every wall defender now shows on the walls and takes a turn shooting (up to 10 with Garrison), instead of at most seven. They stand closer together once there are more than seven.
 - The computer sizes up the enemy army before attacking. Up against a bigger army (for example one gathered on a zone), it holds its troops on the zone nearest its walls and attacks together once it has caught up, instead of sending troops in one at a time. The Easy computer still charges in.
@@ -35,6 +36,7 @@ All the updates to Ages at War, newest first.
 - More realistic effects: layered gunfire, ringing steel, plucked bows, real explosions and engines.
 
 ### Graphics
+- World War and Modern troops wear trousers up to the belt, and Future troops have an armoured waist with a ball joint at the hips, so no torso floats above its legs.
 - All six fortresses redrawn: sunlit masonry with mortar, chips and moss, proper gates (stone arches, studded doors, a portcullis, a riveted blast door), torches and lit windows, plus period details: a palisade and cave fire, a painted frieze and stepped battlements, a cone-roofed keep with ivy, a brick bastion with cannon and a sentry box, a bunker with camo netting and barbed wire, and a glowing future citadel.
 - Better troop art: faces, hands, a proper stride, shading, and more detailed mounts and machines.
 

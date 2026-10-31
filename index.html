@@ -1443,6 +1443,15 @@ function person(c, o, mounted){
       lines(c, [-2.4,-15.8, -2.7,-11.4, 0,-15.8, 0,-11, 2.4,-15.8, 2.7,-11.4], o.col, .7); break;
     case 'coat':
       poly(c, age === 6 ? [-3.8,-16, 3.8,-16, 4.5,-10.4, 1,-10.9, -4.5,-10.4] : [-3.8,-16, 3.8,-16, 4.8,-7.6, 1,-8.4, -4.8,-7.6], o.col); break;
+    case 'uniform': case 'camo':   // trousers up to the belt, so the body sits on its legs
+      poly(c, [-3.6,-16.4, 3.6,-16.4, 3.5,-11.2, .3,-10.6, -3.5,-11.2], legCol);
+      line(c, .3,-14.6, .3,-11, 'rgba(0,0,0,.3)', .5); break;
+    case 'suit':   // a jointed armoured waist and a ball joint at the hips
+      poly(c, [-2.6,-16.4, 2.6,-16.4, 2.1,-13.8, -2.1,-13.8], '#5a6270');
+      line(c, -2.4,-15.1, 2.4,-15.1, 'rgba(255,255,255,.35)', .5);
+      { const g = c.createRadialGradient(-.9, -13.6, .3, 0, -12.7, 2.9); g.addColorStop(0, '#f2f6fa'); g.addColorStop(.55, '#a9b2bd'); g.addColorStop(1, '#5d6673');
+        c.beginPath(); c.arc(0, -12.7, 2.7, 0, Math.PI*2); fs(c, g, .7); }
+      circ(c, .9, -12.4, .7, o.hi, 0); break;
   }
   // the torso: shaded, then dressed for its age
   c.fillStyle = tc; c.fill(TORSO); poly(c, [-3.55,-15.6, -1.5,-15.6, -1.5,-23, -2.2,-23, -3.6,-21.7], SHADOW, 0); rect(c, 2.45,-22.4, .9, 6.4, LIGHT, 0);
@@ -2614,10 +2623,6 @@ function update(dt){
   const D = DIFF[S.diff] || DIFF.normal;
   if (S.shake > 0) S.shake -= dt;
   const maxAge = Math.max(sideAge(0), sideAge(1));
-  if (S.t > 25*60){   // overtime: supplies run low and every front fortress crumbles, so no battle lasts forever
-    if (!S.overtime){ S.overtime = true; say('Overtime: supplies are running low and the front fortresses are crumbling'); }
-    for (let s = 0; s < 2 && S.over < 0; s++){ const i = frontSeat(s), sd = S.sides[s].seats[i]; if (sd.alive){ sd.hp -= sd.max*.003*dt; if (sd.hp <= 0) fortFalls(s, i); } }
-  }
   for (let s = 0; s < 2; s++){
     const side = S.sides[s];
     side.seats.forEach((sd, i) => {
@@ -2630,9 +2635,11 @@ function update(dt){
       if (sd.bar > 0) sd.bar -= dt;
       if (isAI(sd)){ sd.aiT -= dt; if (sd.aiT <= 0){ sd.aiT = (S.mode === 'demo' ? .75 : D.think) * (.7 + Math.random()*.6); aiThink(s, i); } }
       const gate = gateX(s, i);
-      // slow repairs once the walls have been quiet for a while
-      if (sd.age < AGES.length - 1 && sd.hp < sd.max && S.t - sd.lastHit > 6 && !S.units.some(u => u.side !== s && Math.abs(u.x - gate) < 700))
-        sd.hp = Math.min(sd.max, sd.hp + sd.max*.004*dt);
+      // the walls always mend slowly, even under attack and in the last age, and faster once they've been quiet for a while
+      if (sd.hp < sd.max){
+        const quiet = S.t - sd.lastHit > 6 && !S.units.some(u => u.side !== s && Math.abs(u.x - gate) < 700);
+        sd.hp = Math.min(sd.max, sd.hp + sd.max*(quiet ? .004 : .001)*dt);
+      }
       if (sd.hp < sd.max*.33 && Math.random() < dt*2) sfx('crackle', gate);
       if (sd.up.pitch){   // boiling oil on anyone hammering at the gate
         sd.pitchT = (sd.pitchT || 1) - dt;
