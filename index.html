@@ -2328,15 +2328,32 @@ function buyDefender(s, i){
   if (!isAI(sd)) say(`${tag(s)}${defenders(s, i)} defenders on the walls`, s, i);
   return true;
 }
+// in the last age a maxed-out upgrade becomes a boost: +1% health and damage for all of that commander's troops
+const LAST_AGE = AGES.length - 1;
+const canBoost = (sd, k) => sd.age >= LAST_AGE && sd.up[k] + sd.res.filter(r => r.kind === k && !r.boost).length >= maxLvl(k, sd.age);
+const boostCost = sd => round5(300 * Math.pow(1.08, sd.age) * Math.pow(1.06, (sd.boost || 0) + sd.res.filter(r => r.boost).length));
 function research(s, i, kind){
   const sd = S.sides[s].seats[i], U = UPG[kind]; if (!can(sd)) return false;
-  const lvl = sd.up[kind] + sd.res.filter(r => r.kind === kind).length;
+  if (canBoost(sd, kind)){
+    const cost = boostCost(sd);
+    if (sd.res.length >= 3 || sd.gold < cost){ if (sd.kind === 'human') sfx('nope'); return false; }
+    sd.gold -= cost; sd.res.push({kind, boost:1, t:0, dur:10}); if (sd.kind === 'human') sfx('queue');
+    return true;
+  }
+  const lvl = sd.up[kind] + sd.res.filter(r => r.kind === kind && !r.boost).length;
   if (sd.res.length >= 3 || lvl >= maxLvl(kind, sd.age) || sd.gold < upCost(sd, kind, lvl)){ if (sd.kind === 'human') sfx('nope'); return false; }
   sd.gold -= upCost(sd, kind, lvl); sd.res.push({kind, t:0, dur:upTime(kind, lvl)}); if (sd.kind === 'human') sfx('queue');
   return true;
 }
 function finishResearch(s, sd){
-  const r = sd.res.shift(); sd.up[r.kind]++;
+  const r = sd.res.shift(), i = S.sides[s].seats.indexOf(sd);
+  if (r.boost){   // troops already in the field get it too
+    const b = sd.boost = (sd.boost || 0) + 1, f = (1 + .01*b)/(1 + .01*(b - 1));
+    for (const u of S.units) if (u.side === s && u.seat === i && !u.dead){ u.max *= f; u.hp *= f; u.dm = (u.dm || 1)*f; }
+    if (!isAI(sd)){ sfx('upgrade'); say(`${tag(s)}Boost: troops +${b}% health and damage`, s, i); }
+    return;
+  }
+  sd.up[r.kind]++;
   if (r.kind === 'walls') refreshMax(s);
   if (!isAI(sd)){ sfx('upgrade'); say(`${tag(s)}${UPG[r.kind].label} level ${sd.up[r.kind]}`, s, S.sides[s].seats.indexOf(sd)); }
 }
@@ -2389,9 +2406,9 @@ function spawn(s, i, it){
   const st = STATS[it.a][it.r], sd = S.sides[s].seats[i], n = S.sides[s].seats.length;
   const U = sd.up, role = it.r;
   const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' || role === 'shield' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
-  const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp');
+  const z = (i + Math.random())/n, bst = 1 + .01*(sd.boost || 0), hp = st.hp * hpM * CV(sd, 'hp') * bst;
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
-    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * (st.dmg > 0 ? CV(sd, 'dmg') : 1), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
+    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * (st.dmg > 0 ? CV(sd, 'dmg') : 1) * bst, spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
     civ:sd.civ || 0, rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
@@ -2579,6 +2596,7 @@ function aiThink(s, i){
       const sc = (lvl + 1)/(W[k] || 1); if (sc < bs){ bs = sc; pickU = k; pl = lvl; }
     }
     if (pickU && me.gold >= upCost(me, pickU, pl) + (D.waves ? 60 : 120)) research(s, i, pickU);
+    else if (!pickU && age >= LAST_AGE && me.gold >= boostCost(me) + 200) research(s, i, 'weapons');   // everything maxed: buy boosts
     if (me.hp < me.max*.6 && me.up.walls < maxLvl('walls', age) && !me.res.some(r => r.kind === 'walls') && me.gold >= upCost(me, 'walls', me.up.walls)) research(s, i, 'walls');
   }
   if (me.q.length >= (D.waves ? 4 : 2)) return;
@@ -4174,7 +4192,7 @@ function syncUI(){
     else { setTxt(ui.qtxt, AGES[age].name); setVar(ui.qbar, 0); }
     const rs = sd.res.length > 0;
     if (ui.rtxt.hidden === rs){ ui.rtxt.hidden = !rs; ui.rwrap.hidden = !rs; }
-    if (rs){ const r = sd.res[0]; setTxt(ui.rtxt, `Research: ${UPG[r.kind].label} ${sd.up[r.kind] + 1}` + (sd.res.length > 1 ? ` +${sd.res.length - 1}` : '')); setVar(ui.rbar, r.t / r.dur); }
+    if (rs){ const r = sd.res[0]; setTxt(ui.rtxt, r.boost ? `Research: Boost +${(sd.boost || 0) + 1}%` : `Research: ${UPG[r.kind].label} ${sd.up[r.kind] + 1}` + (sd.res.length > 1 ? ` +${sd.res.length - 1}` : '')); setVar(ui.rbar, r.t / r.dur); }
     const full = sd.q.length >= qCap(sd);
     for (const r of ROLES){ const b = ui.units[r]; setOff(b, full || sd.gold < STATS[age][r].cost); badge(b, sd.q.filter(x => x.r === r).length); }
     setOff(ui.acts.cancel, !sd.q.length);
@@ -4199,14 +4217,15 @@ function syncUI(){
     setTxt(ab.querySelector('small'), aReady ? (last ? 'Rank up' : 'Ready') : `${Math.floor(sd.xp)}/${need}`);
     setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
     if (!ui.panel.hidden){
-      const hv = ui.hover && UPG[ui.hover], line = sd.res.length ? 'In line: ' + sd.res.map(r => UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.';
-      const info = hv ? `<b>${hv.label}</b>: ${hv.desc}` + (age < hv.age ? `. Unlocks in the ${AGES[hv.age].name}` : maxLvl(ui.hover, age) < hv.cap ? '. More levels next age' : '') : line;
+      const hv = ui.hover && UPG[ui.hover], line = sd.res.length ? 'In line: ' + sd.res.map(r => r.boost ? 'Boost' : UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.';
+      const info = hv && canBoost(sd, ui.hover) ? `<b>${hv.label}</b> is maxed. <b>Boost</b>: +1% health and damage for all your troops (now +${sd.boost || 0}%)`
+        : hv ? `<b>${hv.label}</b>: ${hv.desc}` + (age < hv.age ? `. Unlocks in the ${AGES[hv.age].name}` : maxLvl(ui.hover, age) < hv.cap ? '. More levels next age' : '') : line;
       if (ui.upq._h !== info){ ui.upq._h = info; ui.upq.innerHTML = info; }
       for (const k of UPG_KEYS){
-        const card = ui.cards[k], U = UPG[k], lvl = sd.up[k], pending = sd.res.filter(r => r.kind === k).length, next = lvl + pending;
-        const cap = maxLvl(k, age), locked = age < U.age, max = next >= cap, cost = max ? 0 : upCost(sd, k, next);
-        setTxt(card.querySelector('small'), locked ? `Age ${U.age + 1}` : lvl >= cap ? 'Max' : max ? '…' : cost);
-        setTxt(card.querySelector('.lv'), locked ? 'Locked' : `Lv ${lvl}/${cap}`);
+        const card = ui.cards[k], U = UPG[k], lvl = sd.up[k], pending = sd.res.filter(r => r.kind === k).length, next = lvl + sd.res.filter(r => r.kind === k && !r.boost).length;
+        const cap = maxLvl(k, age), locked = age < U.age, boost = !locked && canBoost(sd, k), max = !boost && next >= cap, cost = boost ? boostCost(sd) : max ? 0 : upCost(sd, k, next);
+        setTxt(card.querySelector('small'), locked ? `Age ${U.age + 1}` : boost ? cost : lvl >= cap ? 'Max' : max ? '…' : cost);
+        setTxt(card.querySelector('.lv'), locked ? 'Locked' : boost ? `Boost +1%` : `Lv ${lvl}/${cap}`);
         setOff(card, locked || max || sd.res.length >= 3 || sd.gold < cost);
         card.classList.toggle('busy', pending > 0);
       }
@@ -4481,7 +4500,7 @@ function hostSnap(){
   const fresh = list => { const out = []; for (const o of list) if (!o._sent){ o._sent = 1; const c = {...o}; delete c._sent; out.push(c); } return out; };
   sendAll({t:'snap', st:S.t, ot:!!S.overtime, over:S.over, shake:S.shake,
     sides:S.sides.map(side => side.seats.map(sd => ({kind:sd.kind, gold:sd.gold, q:sd.q, qt:sd.qt, def:sd.def, up:sd.up, res:sd.res, bar:sd.bar,
-      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, defAt:sd.defAt, age:sd.age, xp:sd.xp, rank:sd.rank || 0, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
+      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, defAt:sd.defAt, age:sd.age, xp:sd.xp, rank:sd.rank || 0, boost:sd.boost || 0, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
     units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0, u.civ || 0, u.back ? 1 : 0]),
     shots:fresh(S.shots), fx:fresh(S.fx), msgs:fresh(S.msgs), snd:NET.sounds.splice(0)});
 }
