@@ -2486,6 +2486,32 @@ function findTarget(u){
 }
 
 /* =================== computer commander =================== */
+// how much fighting power a troop brings: what it cost, how healthy it still is, and its commander's weapon and armor upgrades
+function armyPower(list){
+  let p = 0;
+  for (const u of list){
+    const sd = S.sides[u.side].seats[u.seat], up = sd ? sd.up : {weapons:0, armor:0}, st = STATS[u.age][u.role];
+    p += st.cost*(u.hp/u.max)*(1 + .06*up.weapons)*(1 + .06*up.armor)*(u.role === 'support' ? .5 : 1);
+  }
+  return p;
+}
+// don't feed troops one at a time into a bigger army: when the enemy's field army clearly outweighs ours,
+// gather on the zone nearest our walls and attack together once we've caught up
+function aiPosture(s, i, me, D, mine, foes){
+  if (D.smart < .75) return;   // the easy computer still charges in
+  const queued = S.sides[s].seats.reduce((n, sd) => n + sd.q.reduce((m, it) => m + STATS[it.a][it.r].cost*.5, 0), 0);
+  const ours = armyPower(mine) + queued, theirs = armyPower(foes), home = s === 0 ? 1 : ZONES;
+  const fighters = mine.filter(u => u.seat === i && !statOf(u).healer).length;
+  if (!me.hold){
+    // hold when they're clearly stronger
+    if (theirs > ours*1.2 && theirs > 0){ me.hold = 1; me.holdT = S.t; me.rally = home; }
+    else me.rally = 0;
+  } else {
+    // go once we match them with a margin, or after a long wait at near parity, or if they've fallen back to nothing
+    const ready = ours >= theirs*1.3 || !foes.length || (S.t - me.holdT > 45 && ours >= theirs*.9 && fighters >= 4);
+    if (ready){ me.hold = 0; me.rally = 0; } else me.rally = home;
+  }
+}
 function aiThink(s, i){
   if (!S.sides[s].seats[i].alive) return;
   const side = S.sides[s], me = side.seats[i], D = DIFF[S.mode === 'demo' ? 'normal' : S.diff], age = me.age, foeS = 1 - s;
@@ -2494,6 +2520,7 @@ function aiThink(s, i){
   for (const u of S.units) if (!u.dead) (u.side === s ? mine : foes).push(u);
   const distF = u => Math.abs(u.x - front(s));
   const near = foes.filter(u => distF(u) < L*.4), close = foes.filter(u => distF(u) < 380);
+  aiPosture(s, i, me, D, mine, foes);
   // the enemy is hiding behind walls: answer with long-range siege behind a front line
   const fsd = S.sides[foeS].seats[frontSeat(foeS)], turtle = defenders(foeS, frontSeat(foeS)) >= 4 || (fsd.up.walls > 0 && foes.length < 3);
   if (!me.repaired && me.hp < me.max*.3 && close.length && emergencyRepair(s, i)) return;
