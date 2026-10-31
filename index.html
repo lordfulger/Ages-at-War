@@ -148,6 +148,18 @@ body:not(.upBig) .upCards{grid-template-columns:repeat(var(--h),minmax(0,1fr));g
   body:not(.upBig) .upLbl{font-size:13px}
 }
 body:not(.upBig) .upCard{touch-action:pan-y}
+/* wide screens: the upgrades wrap around the commander's controls instead of sitting above them */
+body.upWrap:not(.upBig) .upPanel{background:none;border:0;box-shadow:none;padding:0;pointer-events:none;overflow:visible;
+  grid-template-columns:minmax(0,1fr) var(--mid) minmax(0,1fr);grid-template-rows:auto 1fr;gap:6px 10px}
+body.upWrap:not(.upBig) .upHead,body.upWrap:not(.upBig) .upGroup{background:rgba(24,16,9,.82);border:1.5px solid var(--edge);border-radius:10px;pointer-events:auto;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+body.upWrap:not(.upBig) .upHead{grid-column:1/-1;padding:4px 8px}
+body.upWrap:not(.upBig) .upGrid{display:contents}
+body.upWrap:not(.upBig) .upGroup{grid-row:2;padding:5px 7px;align-self:stretch;align-content:start}
+body.upWrap:not(.upBig) .upGroup.g0{grid-column:1}
+body.upWrap:not(.upBig) .upGroup.g1{grid-column:2;align-self:end;margin-bottom:var(--trayH)}
+body.upWrap:not(.upBig) .upGroup.g2{grid-column:3}
+body.upWrap:not(.upBig) .upCards{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+body.upWrap:not(.upBig) .g1 .upCards{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
 /* phones held sideways: a single row that slides, to keep the bar as short as possible */
 @media (max-height:500px){
   body:not(.upBig) .upGrid{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin}
@@ -4108,7 +4120,7 @@ function seatHTML(s, i){
   const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name} (${CLASS[r]}): ${roleHint(age, r)}" aria-label="Train ${st.name}, ${st.cost} gold"><i class="cls">${CLASS[r]}</i><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><div class="upQ"></div><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
-    <div class="upGrid">${UPG_GROUPS.map(([name, keys]) => `<div class="upGroup" style="--n:${keys.length};--h:${Math.ceil(keys.length/2)}"><div class="upLbl">${name}</div><div class="upCards">${keys.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`).join('')}</div></div>`;
+    <div class="upGrid">${UPG_GROUPS.map(([name, keys]) => `<div class="upGroup g${UPG_GROUPS.findIndex(g => g[0] === name)}" style="--n:${keys.length};--h:${Math.ceil(keys.length/2)}"><div class="upLbl">${name}</div><div class="upCards">${keys.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span><span class="qtxt rtxt" data-k="rtxt" hidden></span><span class="qbar rbar" data-k="rwrap" hidden><i data-k="rbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
@@ -4173,6 +4185,13 @@ function placePanel(panel, s, i){
     else { st.top = 'auto'; st.bottom = (innerHeight - head.top + 2) + 'px'; }
     st.maxHeight = (head.top - top) + 'px';
     if (shared){ st.left = seat.left + 'px'; st.right = (innerWidth - seat.right) + 'px'; } else { st.left = L; st.right = R; }
+    // room on both sides of this commander's controls: troops fill the left, the economy sits just above the controls, the fortress fills the right
+    const wrap = !shared && !matchMedia('(max-height: 500px)').matches && Math.min(seat.left, innerWidth - seat.right) >= 330;
+    document.body.classList.toggle('upWrap', wrap);
+    if (wrap){
+      st.top = 'auto'; st.bottom = (innerHeight - seat.bottom) + 'px'; st.maxHeight = (seat.bottom - top) + 'px';
+      panel.style.setProperty('--mid', (seat.width + 12) + 'px'); panel.style.setProperty('--trayH', (seat.bottom - head.top + 4) + 'px');
+    }
   }
 }
 addEventListener('resize', () => openPanels.forEach(key => { const [s, i] = key.split('-').map(Number); if (UI[s][i]) placePanel(UI[s][i].panel, s, i); }));
