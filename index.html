@@ -130,7 +130,9 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* compact: a bar above the troop buttons, troop upgrades beside (or above) fortress and economy upgrades */
 body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow-x:hidden;overflow-y:auto;touch-action:auto;grid-template-columns:minmax(0,1fr)}
 body:not(.upBig) .upHead{flex-wrap:nowrap}
-body:not(.upBig) .upHead > span{font-size:13px}
+body:not(.upBig) .upHead > span{font-size:16px}
+body:not(.upBig) .upQ{font-size:14.5px}
+body:not(.upBig) .upLbl{font-size:13.5px}
 body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* the groups sit side by side when there's room, each as wide as its share of the cards, and wrap onto a second line when there isn't */
 body:not(.upBig) .upGrid{display:flex;flex-wrap:wrap;gap:5px 12px}
@@ -2519,7 +2521,19 @@ function aiPosture(s, i, me, D, mine, foes){
   if (!me.hold){
     // hold when they're clearly stronger
     if (theirs > ours*1.2 && theirs > 0){ me.hold = 1; me.holdT = S.t; me.rally = home; }
-    else me.rally = 0;
+    else if (ours >= theirs*1.3 || !S.zones) me.rally = 0;   // well ahead: attack (taking zones on the way)
+    else {
+      // about even: go for the nearest zone we don't hold, as long as the enemy near it is weaker than us; otherwise keep the furthest one we do
+      const order = s === 0 ? [0, 1, 2] : [2, 1, 0], d = dirOf(s);
+      let goal = 0, kept = home;
+      for (const k of order){
+        const zx = zoneX(k);
+        if (S.zones[k] && S.zones[k].own === s){ kept = k + 1; continue; }
+        const local = armyPower(foes.filter(u => Math.abs(u.x - zx) < ZONE_R + 250 || (u.x - zx)*d < 0));
+        goal = local < ours*.8 ? k + 1 : kept; break;
+      }
+      me.rally = goal || 0;
+    }
   } else {
     // go once we match them with a margin, or after a long wait at near parity, or if they've fallen back to nothing
     const ready = ours >= theirs*1.3 || !foes.length || (S.t - me.holdT > 45 && ours >= theirs*.9 && fighters >= 4);
