@@ -814,65 +814,235 @@ function rrect(c, x, y, w, h, r, fill, lw = .8){ c.beginPath(); c.roundRect ? c.
 function line(c, x1, y1, x2, y2, col, w){ c.lineCap = 'round'; c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
 function limb(c, x1, y1, x2, y2, col, w){ line(c, x1, y1, x2, y2, OUT, w + 1.3); line(c, x1, y1, x2, y2, col, w); }
 function vgrad(c, y0, y1, a, b){ const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, a); g.addColorStop(1, b); return g; }
+const SHADES = new Map();
 function shade(hex, f){
+  const k = hex + f; let v = SHADES.get(k); if (v) return v;
   const n = parseInt(hex.slice(1), 16), t = f < 0 ? 0 : 255, p = Math.abs(f);
   const ch = v => Math.round(v + (t - v)*p);
-  return `rgb(${ch(n >> 16)},${ch(n >> 8 & 255)},${ch(n & 255)})`;
+  v = `rgb(${ch(n >> 16)},${ch(n >> 8 & 255)},${ch(n & 255)})`; SHADES.set(k, v); return v;
 }
 function wheel(c, x, y, r, ph, col = WOOD, spokes = 4){
   circ(c, x, y, r, '#3a2a1c'); circ(c, x, y, r*.78, col, .5);
-  c.strokeStyle = WOOD2; c.lineWidth = r*.18;
-  // spokes turn clockwise, so the wheel rolls forward
-  for (let k = 0; k < spokes; k++){ const a = ph + k*Math.PI/spokes; c.beginPath(); c.moveTo(x - Math.cos(a)*r*.75, y - Math.sin(a)*r*.75); c.lineTo(x + Math.cos(a)*r*.75, y + Math.sin(a)*r*.75); c.stroke(); }
-  circ(c, x, y, r*.2, IRON, .4);
+  c.beginPath();   // spokes turn clockwise, so the wheel rolls forward
+  for (let k = 0; k < spokes; k++){ const a = ph + k*Math.PI/spokes, dx = Math.cos(a)*r*.75, dy = Math.sin(a)*r*.75; c.moveTo(x - dx, y - dy); c.lineTo(x + dx, y + dy); }
+  c.lineCap = 'butt'; c.strokeStyle = WOOD2; c.lineWidth = r*.18; c.stroke(); c.lineCap = 'round';
+  circ(c, x, y, r*.24, IRON, .4);
+  c.beginPath(); c.arc(x, y, r*.89, -2.6, -1.2); c.strokeStyle = 'rgba(255,240,220,.3)'; c.lineWidth = r*.12; c.stroke();
 }
-function tyre(c, x, y, r, ph){ circ(c, x, y, r, '#1d1d1d'); circ(c, x, y, r*.55, '#7b7f86', .5); line(c, x, y, x + Math.cos(ph)*r*.5, y + Math.sin(ph)*r*.5, '#3a3a3a', r*.18); }
+// a rubber tyre with a rolling tread and a steel hub
+function tyre(c, x, y, r, ph){
+  circ(c, x, y, r, '#1d1d1d');
+  c.beginPath(); c.arc(x, y, r*.84, 0, Math.PI*2); c.setLineDash([r*.32, r*.3]); c.lineDashOffset = -ph*r; c.strokeStyle = '#3c3c3c'; c.lineWidth = r*.2; c.stroke(); c.setLineDash([]);
+  circ(c, x, y, r*.52, '#8a8e95', .5); circ(c, x, y, r*.2, '#4a4d52', 0);
+  line(c, x, y, x + Math.cos(ph)*r*.45, y + Math.sin(ph)*r*.45, '#4a4d52', r*.14);
+}
+// a track belt with links that run forward along the top, road wheels and hubs
 function tracks(c, x, w, h, ph){
   rrect(c, x, -h, w, h, h/2, '#2f2f2a');
-  for (let k = 0; k < 5; k++) circ(c, x + h/2 + k*(w - h)/4, -h/2, h*.34, '#5b5c55', .5);
-  c.strokeStyle = '#1a1a17'; c.lineWidth = .6; c.setLineDash([1.4, 1.4]); c.lineDashOffset = -ph*3;
-  c.beginPath(); c.moveTo(x + h/2, -h + .4); c.lineTo(x + w - h/2, -h + .4); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.roundRect ? c.roundRect(x + .7, -h + .7, w - 1.4, h - 1.4, h/2 - .7) : c.rect(x + .7, -h + .7, w - 1.4, h - 1.4);
+  c.setLineDash([1.1, 1]); c.lineDashOffset = -ph*3; c.strokeStyle = '#55554c'; c.lineWidth = .9; c.stroke(); c.setLineDash([]);
+  const rr = h*.33; c.beginPath();
+  for (let k = 0; k < 5; k++){ const cx = x + h/2 + k*(w - h)/4; c.moveTo(cx + rr, -h/2); c.arc(cx, -h/2, rr, 0, Math.PI*2); }
+  fs(c, '#6b6c64', .5);
+  c.beginPath(); for (let k = 0; k < 5; k++){ const cx = x + h/2 + k*(w - h)/4; c.moveTo(cx + rr*.4, -h/2); c.arc(cx, -h/2, rr*.4, 0, Math.PI*2); } c.fillStyle = '#3a3a34'; c.fill();
+}
+// rows of rivets or bolts in one stroke
+function rivets(c, x1, y1, x2, y2, gap, col = 'rgba(30,28,24,.6)', r = .55){ c.setLineDash([.01, gap]); line(c, x1, y1, x2, y2, col, r*2); c.setLineDash([]); }
+/* ---- shading: flat shadow shapes on the far/under side and lit strips on the front/top, drawn as plain fills (gradients
+   cost several times more to rasterize); the few gradients left are cached by their figure-local coordinates ---- */
+const SHADOW = 'rgba(40,20,6,.24)', LIGHT = 'rgba(255,250,235,.34)';
+const GRADS = new Map();
+function fgrad(key, make){ let g = GRADS.get(key); if (!g){ g = make(); GRADS.set(key, g); } return g; }
+// the far side of a ball: the part of the circle not covered by a copy moved d toward angle phi (the light)
+function crescent(c, x, y, r, phi, d, fill){
+  const a = Math.acos(Math.min(1, d/(2*r)));
+  c.beginPath(); c.arc(x, y, r, phi + a, phi - a + Math.PI*2); c.arc(x + Math.cos(phi)*d, y + Math.sin(phi)*d, r, phi + Math.PI + a, phi + Math.PI - a, true);
+  c.fillStyle = fill; c.fill();
+}
+// many short strokes of one color in a single draw
+function lines(c, p, col, w){ c.beginPath(); for (let i = 0; i < p.length; i += 4){ c.moveTo(p[i], p[i+1]); c.lineTo(p[i+2], p[i+3]); } c.lineCap = 'round'; c.strokeStyle = col; c.lineWidth = w; c.stroke(); }
+// a shaft or haft with an outline
+function shaft(c, x1, y1, x2, y2, col, w){ line(c, x1, y1, x2, y2, OUT, w + 1.1); line(c, x1, y1, x2, y2, col, w); }
+// a pointed blade from hilt to tip with a bright edge
+function blade(c, x1, y1, x2, y2, wd, col, edge){
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ux = dx/L, uy = dy/L, nx = -uy*wd, ny = ux*wd, tx = x2 - ux*wd*2.4, ty = y2 - uy*wd*2.4;
+  poly(c, [x1 + nx, y1 + ny, tx + nx, ty + ny, x2, y2, tx - nx, ty - ny, x1 - nx, y1 - ny], col, .5);
+  line(c, x1 - nx*.4, y1 - ny*.4, tx - nx*.4, ty - ny*.4, edge || 'rgba(255,255,255,.75)', wd*.55);
+}
+// shoulder to hand with an elbow that bends down and back
+function arm(c, x1, y1, x2, y2, up, lo, w = 1.9){
+  const dx = x2 - x1, dy = y2 - y1, D = Math.hypot(dx, dy) || 1, L = 4.7, h = D < 2*L ? Math.sqrt(L*L - D*D/4) : 0;
+  const ex = (x1 + x2)/2 - dy/D*h, ey = (y1 + y2)/2 + dx/D*h;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(ex, ey); c.lineTo(x2, y2); c.strokeStyle = OUT; c.lineWidth = w + 1.3; c.stroke();
+  if (up === lo){ c.strokeStyle = up; c.lineWidth = w; c.stroke(); return; }
+  c.strokeStyle = lo; c.lineWidth = w*.92; c.beginPath(); c.moveTo(ex, ey); c.lineTo(x2, y2); c.stroke();
+  c.strokeStyle = up; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(ex, ey); c.stroke();
+}
+function foot(c, fx, fy){ c.moveTo(fx - 1.4, fy); c.lineTo(fx + 2.5, fy); c.quadraticCurveTo(fx + 2.8, fy - 1.6, fx + .7, fy - 2); c.lineTo(fx - 1.4, fy - 2); c.closePath(); }
+const LEGS = [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]];
+function leg(c, hx, hy, kx, ky, fx, fy, col, boot, high){
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.beginPath(); c.moveTo(hx, hy); c.lineTo(kx, ky); c.lineTo(fx, fy - 1.6);
+  c.strokeStyle = OUT; c.lineWidth = 3.9; c.stroke(); c.strokeStyle = col; c.lineWidth = 2.6; c.stroke();
+  if (high){ c.beginPath(); c.moveTo(kx*.35 + fx*.65, ky*.35 + fy*.65); c.lineTo(fx, fy - 1.6); c.strokeStyle = boot; c.stroke(); }
+  c.beginPath(); foot(c, fx, fy); fs(c, boot, .55);
 }
 
 /* ---- people ---- */
 const LEG = {fur:SKIN, tunic:SKIN, armor:SKIN, mail:'#8d9097', doublet:null, coat:'#ece6d6', uniform:'#5d5c3c', camo:'#5f6646', suit:'#dfe5ec'};
+const BOOT = ['#6b4424', '#7a5230', '#7a5230', '#7d8189', '#2b1d14', '#2b1d14', '#2b1d14', '#4a3a24', '#2e2e26', '#c7ced8'];
 function torsoColor(body, o){ return {fur:'#9a6a35', tunic:o.col, armor:'#b9bcc4', mail:'#9a9da5', doublet:o.col, coat:o.col, uniform:'#6f6e48', camo:'#6f7550', suit:'#e8edf2'}[body]; }
-function person(c, o, mounted){
-  const [hat, body] = AGES[o.age].gear, ph = o.ph || 0;
-  if (!mounted){
-    const sw = Math.sin(ph)*4.5, legCol = LEG[body] || o.hi;
-    for (const [x, s] of [[-1.3, sw], [1.3, -sw]]){
-      limb(c, x, -12, x + s, -1.2, legCol, 2.4);
-      rect(c, x + s - 1.6, -1.7, 3.9, 1.7, o.age >= 4 ? '#2b1d14' : '#6b4424', .5);
-    }
-  }
-  if (o.civ) civBack(c, o, mounted);
+// upper arm, forearm and hand for each outfit
+function sleeves(body, o){
   switch (body){
-    case 'fur':     poly(c, [-4.6,-16, 4.6,-16, 5.2,-10, 3,-11, 1.5,-9.4, -.5,-11, -2.5,-9.4, -5,-10.5], '#8a5a2b'); break;
-    case 'tunic':   poly(c, [-3.6,-16, 3.6,-16, 4.9,-10.4, -4.9,-10.4], '#efe5cc'); line(c, -1.5,-15.5, -2.2,-10.8, 'rgba(0,0,0,.15)', .5); line(c, 1.5,-15.5, 2.2,-10.8, 'rgba(0,0,0,.15)', .5); break;
-    case 'armor':   poly(c, [-3.6,-16, 3.6,-16, 4.9,-10.4, -4.9,-10.4], o.col); for (let x = -3.6; x < 4; x += 1.8) line(c, x, -15.8, x*1.3, -10.6, shade(o.col, -.35), .5); break;
-    case 'mail':    poly(c, [-3.8,-16, 3.8,-16, 4.8,-9.4, -4.8,-9.4], '#9a9da5'); poly(c, [-3.4,-16, 3.4,-16, 3.9,-10.6, -3.9,-10.6], o.col); break;
-    case 'doublet': ell(c, 0, -13.6, 4.6, 2.9, o.hi); break;
-    case 'coat':    poly(c, [-3.8,-16, 3.8,-16, 4.8,-7.6, 1,-8.4, -4.8,-7.6], o.col); break;
+    case 'fur': case 'tunic': return [SKIN, SKIN, SKIN];
+    case 'armor': return [o.col, SKIN, SKIN];
+    case 'mail': return ['#9a9da5', '#9a9da5', '#80848c'];
+    case 'doublet': return [o.hi, o.col, SKIN];
+    case 'coat': return [o.col, o.col, SKIN];
+    case 'uniform': return ['#6f6e48', '#6f6e48', SKIN];
+    case 'camo': return ['#6f7550', '#6f7550', '#3b3a2c'];
+    default: return ['#e8edf2', '#e8edf2', '#c7ced8'];
   }
-  const tc = torsoColor(body, o);
-  c.beginPath(); c.moveTo(-3.6,-15.6); c.lineTo(3.6,-15.6); c.lineTo(3.3,-22.6); c.lineTo(-3.3,-22.6); c.closePath();
-  fs(c, vgrad(c, -22.6, -15.6, shade(tc.startsWith('#') ? tc : '#888888', .18), tc));
-  if (body === 'fur') line(c, -3,-22, 3,-16, o.col, 1.6);
-  if (body === 'armor'){ for (let y = -21.2; y < -16; y += 1.5) line(c, -3.2, y, 3.2, y, '#767982', .5); line(c, -3,-22.4, 3,-22.4, o.col, 1.2); }
-  if (body === 'mail'){ poly(c, [-3,-15.8, 3,-15.8, 2.8,-22.4, -2.8,-22.4], o.col, .5); line(c, 0,-21.6, 0,-16.6, '#f1d36a', .9); line(c, -1.6,-20, 1.6,-20, '#f1d36a', .9); }
-  if (body === 'coat'){ line(c, -3,-22, 3,-16.2, '#f0ece0', .9); line(c, 3,-22, -3,-16.2, '#f0ece0', .9); }
-  if (body === 'doublet'){ ell(c, -3.2, -21, 1.6, 1.9, o.hi, 0, .5); }
-  if (body === 'uniform'){ rect(c, -3.5,-21.4, 1.5, 1.6, o.col, .3); line(c, -3.4,-16.3, 3.4,-16.3, '#3b2a18', 1.2); }
-  if (body === 'camo'){ poly(c, [-3,-16.2, 3,-16.2, 2.8,-21.6, -2.8,-21.6], o.col, .5); line(c, -2,-19, 2,-19, shade(o.col, -.3), .6); }
-  if (body === 'suit'){ line(c, -2.8,-21, 2.8,-21, o.hi, 1); line(c, 0,-21, 0,-16.6, o.hi, .8); }
-  if (body === 'fur' || body === 'tunic' || body === 'armor') rect(c, -3.7,-16.7, 7.4, 1.3, '#d9a93a', .4);
+}
+const MELEE = {club:1, spear:1, sword:1, pike:1, bayonet:1, blade:1, saber:1};
+// where the second hand holds a two-handed weapon (none: it swings free)
+function grip(w, atk){
+  switch (w){
+    case 'gun': return [atk ? 9 : 10, -21.2];
+    case 'bayonet': return [atk ? 13 : 9, -18.4];
+    case 'mg': return [8.6, -17.1];
+    case 'smg': return [7.6, -18.3];
+    case 'launcher': return [7.2, -22.4];
+    case 'laser': return [9.4, -18.8];
+    case 'crossbow': return [8.4, -18.8];
+    case 'bow': return atk ? [.4, -20] : null;
+    case 'pike': return atk ? [-.4, -20.1] : null;
+  }
+  return null;
+}
+function beardOf(o){
+  const a = o.age, w = o.w;
+  if (w === 'staff') return 'long';
+  if (a === 0) return 'full';
+  if (a === 4 && (w === 'gun' || w === 'sword')) return 'goatee';
+  if ((a === 5 || a === 6) && (w === 'gun' || w === 'bayonet' || w === 'kit')) return 'moustache';
+  if (a === 7 && w === 'mg') return 'stubble';
+  return null;
+}
+const TORSO = new Path2D('M-3.5 -15.6 L-3.6 -21.7 Q-3.6 -23 -2.2 -23 L2.1 -23 Q3.7 -23 3.8 -21.5 L3.6 -15.6 Z');
+// a face with a bit of character: nose, ear, eye and brow, a mouth that shouts when attacking, and beards on some
+function face(c, o){
+  const atk = o.atk, beard = beardOf(o);
+  c.beginPath(); c.arc(0, -25.9, 3.4, .45, Math.PI*2 - .24); c.lineTo(4.25, -25); c.closePath(); fs(c, SKIN);   // head and nose
+  crescent(c, 0, -25.9, 3.4, -.55, 1.6, SHADOW);
+  switch (beard){
+    case 'full': poly(c, [-.6,-25.2, 1,-24.5, 3.6,-24.6, 3.6,-23.2, 2.6,-21.5, .6,-21.3, -.7,-22.6], '#3a2412', .5); break;
+    case 'long': poly(c, [-.6,-25.2, 1,-24.5, 3.6,-24.6, 3.4,-22.6, 2.3,-19, 1,-20.4, -.6,-22.6], '#ddd6c8', .5); line(c, 1.6,-23.4, 2,-20.8, 'rgba(0,0,0,.18)', .4); break;
+    case 'goatee': poly(c, [1.9,-24.6, 3.9,-24.6, 3.6,-24, 3.2,-23.9, 3,-22, 2.3,-23.8, 1.7,-23.9], '#3a2412', 0); break;
+    case 'moustache': poly(c, [1.8,-24.6, 3.9,-24.7, 3.7,-23.9, 2.7,-24.2, 1.6,-23.8], '#4a2c14', 0); break;
+    case 'stubble': ell(c, 1.9, -23.6, 1.9, 1.1, 'rgba(40,30,20,.32)', 0, 0); break;
+  }
+  ell(c, 1.95, -25.85, .45, .62, OUT, 0, 0);
+  if (atk){ line(c, 1.1,-27.35, 3,-26.6, '#2a1608', .6); ell(c, 2.75,-23.9, .55, .45, '#5a1e10', 0, .3); }
+  else line(c, 1.1,-27, 3,-27.1, '#2a1608', .55);
+}
+function person(c, o, mounted){
+  const [hat, body] = AGES[o.age].gear, ph = o.ph || 0, still = !ph, atk = o.atk, age = o.age, w = o.w;
+  const tc = torsoColor(body, o), sl = sleeves(body, o), g = grip(w, atk);
+  const legCol = LEG[body] || o.hi, boot = BOOT[age], high = age >= 4;
+  const bob = mounted || still ? 0 : (.5 - Math.abs(Math.cos(ph)))*.9;
+  if (!mounted){   // legs stride with a bent knee, and the foot coming forward lifts off the ground
+    const P = LEGS;
+    for (let far = 1; far >= 0; far--){
+      const lp = ph + (far ? 0 : Math.PI), s = still ? (far ? -1.3 : 1.5) : Math.sin(lp)*4.4, lift = still ? 0 : Math.max(0, Math.cos(lp))*1.7;
+      const L = P[far], hx = far ? -1.2 : 1.2, hy = -12 + bob, fx = hx + s, fy = -lift;
+      L[0] = hx; L[1] = hy; L[2] = (hx + fx)/2 + .8 + lift*.7; L[3] = (hy + fy)/2 - .3; L[4] = fx; L[5] = fy;
+    }
+    c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = 3.9; c.strokeStyle = OUT; c.beginPath();
+    for (const L of P){ c.moveTo(L[0], L[1]); c.lineTo(L[2], L[3]); c.lineTo(L[4], L[5] - 1.6); }
+    c.stroke(); c.lineWidth = 2.6;
+    for (let far = 1; far >= 0; far--){ const L = P[far]; c.beginPath(); c.moveTo(L[0], L[1]); c.lineTo(L[2], L[3]); c.lineTo(L[4], L[5] - 1.6); c.strokeStyle = far ? shade(legCol, -.22) : legCol; c.stroke(); }
+    if (high){ const L = P[0]; c.beginPath(); c.moveTo(L[2]*.35 + L[4]*.65, L[3]*.35 + L[5]*.65); c.lineTo(L[4], L[5] - 1.6); c.strokeStyle = boot; c.stroke(); }
+    c.beginPath(); for (const L of P) foot(c, L[4], L[5]); fs(c, boot, .55);
+  } else if (o.seat) leg(c, 1, -12.5, 5.2, -11.2, 3.8, -4.6, legCol, boot, high);   // a rider's near leg hangs down the mount's side
+  c.save();
+  if (bob) c.translate(0, bob);
+  if (atk && MELEE[w] && !mounted){ c.translate(0, -12); c.rotate(.1); c.translate(.5, 12); }   // lean into the blow
+  if (o.civ) civBack(c, o, mounted);
+  if (w === 'bow' || w === 'crossbow'){   // a quiver on the back
+    c.save(); c.translate(-3.4, -19.4); c.rotate(-.35);
+    c.beginPath(); for (const fx of [-.7, .1, .9]){ c.moveTo(fx,-5.6); c.lineTo(fx - .5,-7.4); c.lineTo(fx + .6,-7.6); } c.fillStyle = '#f2ead6'; c.fill();
+    rrect(c, -1.4, -5.6, 2.8, 8.4, .8, '#8a5a30', .6); line(c, -1.4,-4.6, 1.4,-4.6, CIV_GOLD, .5); c.restore();
+  } else if (w === 'javelin'){ lines(c, [-6,-10, 1,-28, -5,-10.6, 2,-28.6], WOOD2, .9); }
+  // the far arm swings opposite the far leg, holds the reins when riding, or steadies a two-handed weapon
+  const bx = g ? g[0] : mounted ? 4.2 : still ? .2 : -.4 - Math.sin(ph)*2.6, by = g ? g[1] : mounted ? -17 : -14.4;
+  arm(c, -.4, -21.6, bx, by, shade(sl[0], -.2), shade(sl[1], -.2));
+  if (!g) circ(c, bx, by, 1.05, shade(sl[2], -.2), .6);
+  switch (body){   // skirts, kilts and coat tails
+    case 'fur':
+      poly(c, [-4.6,-16, 4.6,-16, 5.2,-10, 3,-11, 1.5,-9.4, -.5,-11, -2.5,-9.4, -5,-10.5], '#8a5a2b');
+      lines(c, [-2.6,-14.6, -2.1,-12, -.2,-14.6, .3,-12, 2.2,-14.6, 2.7,-12, -2,-21, -1.4,-20, 1.4,-19.6, 2,-18.6, -1,-17.6, -.4,-16.8], 'rgba(50,28,8,.42)', .5); break;
+    case 'tunic':
+      poly(c, [-3.6,-16, 3.6,-16, 4.9,-10.4, -4.9,-10.4], '#efe5cc');
+      lines(c, [-2.4,-15.4, -3.1,-10.9, -1,-15.4, -1.3,-10.9, 2.9,-15.4, 3.7,-10.9], 'rgba(90,70,30,.3)', .45);
+      poly(c, [-.2,-15.8, 2,-15.8, 1.8,-10.6, .1,-10.6], o.col, 0); break;
+    case 'armor':
+      poly(c, [-3.6,-16, 3.6,-16, 4.9,-10.4, -4.9,-10.4], o.col);
+      lines(c, [-1.8,-15.8, -2.3,-10.6, 0,-15.8, 0,-10.6, 1.8,-15.8, 2.3,-10.6], shade(o.col, -.4), .5); break;
+    case 'mail':
+      poly(c, [-3.8,-16, 3.8,-16, 4.8,-9.4, -4.8,-9.4], '#9a9da5');
+      poly(c, [-3.4,-16, 3.4,-16, 3.9,-10.6, -3.9,-10.6], o.col, 0); line(c, -3.2,-11.3, 3.6,-11.3, '#f1d36a', .5); break;
+    case 'doublet':
+      ell(c, 0, -13.6, 4.6, 2.9, o.hi);
+      lines(c, [-2.4,-15.8, -2.7,-11.4, 0,-15.8, 0,-11, 2.4,-15.8, 2.7,-11.4], o.col, .7); break;
+    case 'coat':
+      poly(c, age === 6 ? [-3.8,-16, 3.8,-16, 4.5,-10.4, 1,-10.9, -4.5,-10.4] : [-3.8,-16, 3.8,-16, 4.8,-7.6, 1,-8.4, -4.8,-7.6], o.col); break;
+  }
+  // the torso: shaded, then dressed for its age
+  c.fillStyle = tc; c.fill(TORSO); poly(c, [-3.55,-15.6, -1.5,-15.6, -1.5,-23, -2.2,-23, -3.6,-21.7], SHADOW, 0); rect(c, 2.45,-22.4, .9, 6.4, LIGHT, 0);
+  switch (body){
+    case 'fur': line(c, -3,-22.4, 3,-16, OUT, 2.4); line(c, -3,-22.4, 3,-16, o.col, 1.6); break;
+    case 'tunic': c.beginPath(); c.ellipse(.3, -22.9, 3.5, 2, 0, 0, Math.PI); fs(c, CIV_GOLD, 0); line(c, -2,-21.6, 2.6,-21.6, o.hi, .5); break;
+    case 'armor':
+      lines(c, [-3.3,-21.2, 3.5,-21.2, -3.3,-19.7, 3.5,-19.7, -3.3,-18.2, 3.5,-18.2, -3.3,-16.7, 3.5,-16.7], '#6e717a', .55);
+      lines(c, [-1.6,-20.75, 3.2,-20.75, -1.6,-19.25, 3.2,-19.25, -1.6,-17.75, 3.2,-17.75], 'rgba(255,255,255,.45)', .35);
+      line(c, -3.2,-22.5, 3.2,-22.5, o.col, 1.2); break;
+    case 'mail':
+      poly(c, [-3,-15.8, 3,-15.8, 2.8,-22.6, -2.8,-22.6], o.col, 0);
+      lines(c, [0,-21.8, 0,-16.6, -1.7,-20, 1.7,-20], OUT, 1.6); lines(c, [0,-21.8, 0,-16.6, -1.7,-20, 1.7,-20], '#f1d36a', .9); break;
+    case 'doublet':
+      lines(c, [-1.8,-22.2, -1.8,-16.2, .2,-22.2, .2,-16.2, 2.2,-22.2, 2.2,-16.2], o.hi, .7);
+      line(c, -3.5,-16.3, 3.6,-16.3, '#3b2a18', 1); ell(c, .3, -23, 3.1, 1.2, '#f6f2e6', 0, .5); break;
+    case 'coat':
+      rect(c, 2.4, -22.6, 1.3, 6.2, o.hi, 0);
+      if (age === 5) lines(c, [-3,-22.2, 3,-16.4, 3,-22.2, -3,-16.4], '#f0ece0', 1);
+      else { lines(c, [-3.1,-22.4, 3.3,-16.4, -3.5,-16.2, 3.6,-16.2], '#3b2a18', 1); rect(c, .3,-16.8, 1.2, 1.2, CIV_GOLD, 0); }
+      break;
+    case 'uniform':
+      rect(c, -3.5,-21.4, 1.5, 1.6, o.col, 0); rect(c, 1.4, -21.2, 1.6, 1.4, 'rgba(0,0,0,.14)', 0);
+      line(c, -3.4,-16.3, 3.5,-16.3, '#3b2a18', 1.2); rect(c, -.8,-17.3, 3.6, 1.5, '#4e3a20', 0); break;
+    case 'camo':
+      ell(c, -1.8,-18, 1.1, .7, 'rgba(40,46,24,.5)', .4, 0);
+      poly(c, [-3,-16.2, 3,-16.2, 2.8,-21.6, -2.8,-21.6], o.col, 0);
+      rect(c, -2.2, -18.6, 5.6, 2, shade(o.col, -.3), 0); line(c, .6,-18.4, .6,-16.8, 'rgba(0,0,0,.35)', .4); break;
+    case 'suit':
+      lines(c, [-2.8,-21, 2.8,-21, 0,-21, 0,-16.6], o.hi, .9); circ(c, 1.6,-19, 1.1, o.hi, 0); circ(c, 1.9,-19.3, .4, '#ffffff', 0); break;
+  }
+  if (body === 'fur' || body === 'tunic' || body === 'armor') rect(c, -3.7,-16.7, 7.4, 1.3, '#d9a93a', 0);
+  c.strokeStyle = OUT; c.lineWidth = .8; c.stroke(TORSO);
   rect(c, -1, -24, 2, 1.8, SKIN, 0);
-  if (hat !== 'visor'){ circ(c, 0, -25.8, 3.3, SKIN); circ(c, 1.8, -26, .45, OUT, 0); }
+  if (hat !== 'visor'){ if (hat === 'greathelm') circ(c, 0, -25.9, 3.4, SKIN); else face(c, o); }
   hatDraw(c, hat, o);
-  if (hat === 'brodie' || hat === 'helmet'){ line(c, -3.4,-27.6, 3.4,-27.6, o.col, 1.3); rect(c, -3.7,-21.6, 1.8, 2.2, o.col, .3); }
+  if (hat === 'brodie' || hat === 'helmet') rect(c, -3.7,-21.6, 1.8, 2.2, o.col, .3);
   if (o.civ) civFront(c, o, mounted);
-  weapon(c, o,(body === 'fur' || body === 'tunic' || body === 'armor') ? SKIN : tc);
+  if (body === 'armor' || body === 'suit'){   // a shoulder plate
+    c.beginPath(); c.ellipse(.4, -21.9, 2.4, 1.5, -.15, 0, Math.PI*2); fs(c, body === 'armor' ? '#c4c7ce' : '#f2f5f9', .6);
+  }
+  const f = weapon(c, o, sl);
+  if (f || g){ c.beginPath(); if (f){ c.moveTo(f[0] + 1.1, f[1]); c.arc(f[0], f[1], 1.1, 0, Math.PI*2); } if (g){ c.moveTo(g[0] + 1.1, g[1]); c.arc(g[0], g[1], 1.1, 0, Math.PI*2); } fs(c, sl[2], .6); }   // fists over the grips
+  c.restore();
 }
 /* ---- civilizations: the same troops, dressed their own way ---- */
 const CIV_GOLD = '#e3b437', CIV_ROBE = '#2e3d8c', CIV_SAND = '#d9a441', CIV_LEATHER = '#8a5a30';
@@ -935,384 +1105,551 @@ function civPennant(c, o){
 }
 function hatDraw(c, hat, o){
   switch (hat){
-    case 'hair': c.beginPath(); c.arc(-.3,-26.6, 3.6, Math.PI*.9, Math.PI*2.05); c.lineTo(-3.8,-23.2); c.closePath(); fs(c, '#3a2412', .5);
-      poly(c, [.4,-23.7, 3.2,-23.9, 2.3,-21.6, .2,-22.4], '#3a2412', .4); break;
-    case 'cloth': c.beginPath(); c.moveTo(3.2,-26.3); c.quadraticCurveTo(.3,-31,-3.6,-26.6); c.lineTo(-4.7,-21.3); c.lineTo(-2.2,-22.6); c.lineTo(-1.4,-25.4); c.closePath(); fs(c, o.col, .6);
-      line(c, -3.9,-24.5, -2,-24.5, '#e8c25a', .6); line(c, -3.2,-27.6, 2.4,-28.4, '#e8c25a', .6); break;
-    case 'crest': c.beginPath(); c.arc(0,-26.2, 3.8, Math.PI, 0); c.lineTo(3.8,-25); c.lineTo(-3.8,-23.8); c.closePath(); fs(c, BRONZE, .6);
-      c.beginPath(); c.ellipse(-.6,-30, 4.3, 2.3, -.15, Math.PI, 0); c.closePath(); fs(c, o.col, .5); break;
-    case 'greathelm': rrect(c, -3.7,-30.4, 7.6, 6.9, 1.2, vgrad(c, -30, -24, '#d0d4da', '#7d8189'), .6); line(c, .6,-27.4, 3.7,-27.4, OUT, .9); ell(c, -1.2,-31.6, 2.6, 1.4, o.col, -.2, .4); break;
-    case 'morion': c.beginPath(); c.arc(0,-27, 3.5, Math.PI, 0); c.closePath(); fs(c, STEEL, .6);
-      c.beginPath(); c.moveTo(-5.4,-26.2); c.quadraticCurveTo(0,-27.8, 5.4,-26.2); c.quadraticCurveTo(0,-26.6,-5.4,-26.2); fs(c, STEEL, .5);
-      poly(c, [-1.8,-30, 1.8,-30, 0,-32.4], STEEL, .4); break;
-    case 'tricorn': poly(c, [-5,-27, 5,-27, 3.6,-30.4, 0,-29.2, -3.6,-30.4], '#1f1a17', .5); line(c, -4.8,-27, 4.8,-27, '#d9a93a', .5); break;
-    case 'kepi': rect(c, -3.2,-31.2, 6.4, 4.3, o.col, .6); poly(c, [1.4,-26.9, 5.4,-26.6, 3.2,-26], '#1a1a1a', .4); line(c, -3.2,-27.4, 3.2,-27.4, '#d9a93a', .6); break;
-    case 'brodie': ell(c, 0,-27.4, 5.8, 1.3, '#5d5f3a', 0, .5); c.beginPath(); c.arc(0,-27.4, 3.4, Math.PI, 0); c.closePath(); fs(c, '#686b42', .5); break;
-    case 'helmet': c.beginPath(); c.arc(0,-26.4, 4, Math.PI, 0); c.lineTo(4,-24.6); c.lineTo(-4,-24.6); c.closePath(); fs(c, '#4c5536', .6); rect(c, .6,-27.7, 3, 1.2, '#2b2b2b', .3); break;
-    case 'visor': circ(c, 0,-26, 4, vgrad(c, -30, -22, '#ffffff', '#c7ced8'), .6); ell(c, 1.8,-26, 2.3, 1.3, o.hi, 0, .4); break;
+    case 'hair':   // a shaggy mop and a team headband
+      c.beginPath(); c.moveTo(3.3,-26.7); c.quadraticCurveTo(2.8,-30.4, -.5,-30.1); c.quadraticCurveTo(-4.1,-29.8, -4.2,-26); c.lineTo(-4.7,-22.4); c.lineTo(-3.5,-23.5);
+      c.lineTo(-3,-22); c.lineTo(-2,-24); c.lineTo(-1,-25.6); c.quadraticCurveTo(1,-27.6, 3.3,-26.7); c.closePath(); fs(c, '#3a2412', .5);
+      line(c, -1.6,-29.2, 1.4,-29.3, 'rgba(255,230,200,.2)', .6);
+      line(c, -3.9,-27.4, 3.1,-27.9, OUT, 1.5); line(c, -3.9,-27.4, 3.1,-27.9, o.col, .8); break;
+    case 'cloth':  // a striped headcloth
+      c.beginPath(); c.moveTo(3.2,-26.3); c.quadraticCurveTo(.3,-31,-3.6,-26.6); c.lineTo(-4.7,-21.3); c.lineTo(-2.2,-22.6); c.lineTo(-1.4,-25.4); c.closePath(); fs(c, o.col, .6);
+      lines(c, [-4.1,-24.5, -2,-24.5, -4.3,-22.9, -2.3,-23.3, -3.2,-27.6, 2.4,-28.4, -2.5,-29, 1.4,-29.6], '#e8c25a', .55);
+      line(c, 2.9,-26.5, -1.4,-25.4, OUT, .5); break;
+    case 'crest': {   // a bronze galea: brow ridge, cheek and neck guards, and a horsehair crest in team colors
+      c.beginPath(); c.ellipse(-.6, -30.2, 4.3, 2.3, -.12, Math.PI, 0); c.closePath(); fs(c, o.col, .5);
+      lines(c, [-3.4,-29.9, -3,-31.6, -1.6,-29.9, -1.2,-31.6, .2,-29.9, .6,-31.6, 2,-29.9, 2.4,-31.6], shade(o.col, -.35), .4);
+      c.beginPath(); c.arc(0,-26.6, 3.8, Math.PI, 0); c.lineTo(3.9,-26.3); c.lineTo(-3.4,-26.3); c.lineTo(-4.7,-23.3); c.lineTo(-3.8,-23.4); c.lineTo(-3.8,-26.6); c.closePath(); fs(c, BRONZE, .6); c.beginPath(); c.arc(0,-26.6, 2.7, -2.5, -1.7); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = .5; c.stroke();
+      poly(c, [-.4,-26.4, 1.6,-26.4, 1.3,-23.5, -.2,-23.8], BRONZE, 0);
+      line(c, -3.6,-26.4, 4.1,-26.4, '#8a5f22', .7); circ(c, -.2,-25.2, .4, '#f1d36a', 0); break; }
+    case 'greathelm':   // a barrel helm with a sight slit, breaths and a crest
+      rrect(c, -3.7,-30.4, 7.6, 6.9, 1.2, '#b8bcc4', .6);
+      line(c, .4,-27.4, 3.9,-27.4, OUT, 1); line(c, 1.9,-30.2, 1.9,-23.7, '#8a8e96', .5);
+      c.setLineDash([.01, .7]); lines(c, [2.6,-25.6, 3.4,-25.6, 2.6,-24.6, 3.4,-24.6], '#3a3d42', .5); c.setLineDash([]);
+      line(c, -3.5,-29.9, 3.7,-29.9, 'rgba(255,255,255,.5)', .5);
+      ell(c, -1.2,-31.6, 2.6, 1.4, o.col, -.2, .4); break;
+    case 'morion':   // a combed steel morion with a team plume
+      ell(c, -3.6,-29.8, .9, 2.4, o.col, -.7, .4);
+      c.beginPath(); c.arc(0,-27, 3.5, Math.PI, 0); c.closePath(); fs(c, STEEL, .6); c.beginPath(); c.arc(0,-27, 2.5, -2.5, -1.7); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = .5; c.stroke();
+      poly(c, [-1.9,-30, 1.9,-30, 0,-32.6], STEEL, .45);
+      c.beginPath(); c.moveTo(-5.4,-26.2); c.quadraticCurveTo(0,-27.9, 5.4,-26.2); c.quadraticCurveTo(0,-26.6,-5.4,-26.2); fs(c, STEEL, .5);; break;
+    case 'tricorn':
+      poly(c, [-5,-27, 5,-27, 3.6,-30.4, 0,-29.2, -3.6,-30.4], '#2a2420', .5); line(c, -4.8,-27, 4.8,-27, '#d9a93a', .55);
+      circ(c, 2.4,-28.3, .9, '#f2ece0', 0); circ(c, 2.4,-28.3, .5, o.col, 0); break;
+    case 'kepi':
+      poly(c, [-3.2,-26.9, 3.2,-26.9, 3.4,-31.2, -3.4,-31.6], o.col, .6);
+      line(c, -3.3,-31.4, 3.3,-31.2, shade(o.col, .3), .6);
+      poly(c, [1.4,-26.9, 5.4,-26.6, 3.2,-25.9], '#1a1a1a', .4); line(c, -3.2,-27.5, 3.2,-27.5, '#d9a93a', .6); circ(c, 1.2,-29.4, .55, '#d9a93a', 0); break;
+    case 'brodie':
+      ell(c, 0,-27.4, 5.8, 1.3, '#5d5f3a', 0, .5); line(c, -2.4,-27.2, 1.6,-22.8, '#4a3a24', .4);
+      c.beginPath(); c.arc(0,-27.4, 3.4, Math.PI, 0); c.closePath(); fs(c, '#686b42', .5); c.beginPath(); c.arc(0,-27.4, 2.4, -2.5, -1.7); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = .5; c.stroke();
+      line(c, -3.4,-27.8, 3.4,-27.8, o.col, 1.1);; break;
+    case 'helmet':   // a combat helmet with goggles strapped on
+      c.beginPath(); c.moveTo(-4.4,-24.2); c.quadraticCurveTo(-4.8,-30.6, 0,-30.6); c.quadraticCurveTo(4.3,-30.5, 4.4,-27.3); c.lineTo(-1,-27.4); c.lineTo(-2.2,-24.6); c.closePath();
+      fs(c, '#55603c', .6);
+      ell(c, -2,-28.6, 1.2, .7, 'rgba(36,40,22,.55)', .3, 0); ell(c, 1.6,-29.6, .9, .5, 'rgba(120,110,70,.5)', 0, 0);
+      line(c, -4.2,-27.6, -1.2,-28.2, o.col, 1.2);
+      rrect(c, .2,-29.5, 3.8, 1.5, .6, '#2b2b2b', 0); rect(c, 2.2,-29.2, 1.4, .9, '#9fd0e8', 0); break;
+    case 'visor':   // a sealed helmet with a glowing visor and a fin
+      poly(c, [-2.6,-29.6, -4.6,-31.4, -1,-30.2], o.col, .45);
+      circ(c, 0,-26, 4, '#eef2f6', .6); crescent(c, 0,-26, 4, -.55, 1.7, 'rgba(60,80,110,.25)');
+      c.beginPath(); c.moveTo(4,-26.9); c.lineTo(-.4,-26.9); c.quadraticCurveTo(-.6,-24.4, 2.6,-24.2); c.lineTo(3.8,-24.4); c.closePath(); fs(c, o.hi, .45);
+      line(c, .5,-26.3, 3.1,-26.3, 'rgba(255,255,255,.9)', .5); line(c, -3.4,-24.2, -1.4,-23.2, '#9aa6b4', .5); break;
   }
 }
-function weapon(c, o, arm){
+function weapon(c, o, sl){
   const atk = o.atk, w = o.w, sx = .8, sy = -21.4;
-  const hand = (x, y) => limb(c, sx, sy, x, y, arm, 1.8);
+  let fist = null;
+  const hand = (x, y) => { arm(c, sx, sy, x, y, sl[0], sl[1]); fist = [x, y]; };
   switch (w){
     case 'club':
-      if (atk){ hand(7,-19); line(c, 7,-19, 14,-14, WOOD, 2.2); circ(c, 14.5,-13.6, 2.1, WOOD2, .5); }
-      else { hand(4,-19); line(c, 4,-19, 6,-29, WOOD, 2.2); circ(c, 6.2,-29.8, 2.1, WOOD2, .5); }
+      if (atk){ hand(7,-19); shaft(c, 6.2,-19.6, 13.4,-14.6, WOOD, 2); ell(c, 14.5,-13.8, 2.6, 2.1, WOOD2, .6); circ(c, 16.2,-15, .6, WOOD2, .4); }
+      else { hand(4,-19); shaft(c, 3.6,-17.8, 6,-29, WOOD, 2); ell(c, 6.3,-30, 2.1, 2.6, WOOD2, .3, .6); circ(c, 7.6,-31.4, .6, WOOD2, .4); }
       break;
     case 'rock':
-      if (atk) hand(8,-23); else { hand(2,-28.5); circ(c, 2.4,-30, 1.8, '#9b9488', .6); }
+      if (atk) hand(8,-23); else { hand(2,-28.5); circ(c, 2.4,-30, 1.9, '#9b9488', .6); }
       break;
     case 'spear':
-      circ(c, 3.4,-17.8, 4.8, vgrad(c, -22, -13, shade(o.col, .25), shade(o.col, -.2)));
-      c.beginPath(); c.arc(3.4,-17.8, 4.3, 0, Math.PI*2); c.strokeStyle = '#d9a93a'; c.lineWidth = .8; c.stroke(); circ(c, 3.4,-17.8, 1, '#d9a93a', .3);
-      if (atk){ line(c, -6,-20, 18,-20, WOOD, 1.4); poly(c, [22,-20, 17,-21.8, 17,-18.2], BRONZE, .4); }
-      else { line(c, -3,-9, 8,-35, WOOD, 1.4); poly(c, [9.6,-38.6, 6.6,-34.6, 9.4,-33.4], BRONZE, .4); }
+      circ(c, 3.4,-17.8, 4.8, o.col);
+      c.beginPath(); c.arc(3.4,-17.8, 4.2, 0, Math.PI*2); c.strokeStyle = '#d9a93a'; c.lineWidth = .8; c.stroke();
+      circ(c, 3.4,-17.8, 1.3, BRONZE, 0);
+      if (atk){ line(c, -6,-20, 17.4,-20, WOOD, 1.4); poly(c, [22.2,-20, 19,-21.5, 16.8,-20, 19,-18.5], BRONZE, .45); }
+      else { line(c, -3,-9, 8,-35, WOOD, 1.4); poly(c, [9.7,-39, 7.2,-35.8, 8,-34, 9.4,-35.4], BRONZE, .45); }
       break;
     case 'sword': {
-      if (o.age === 2) rrect(c, 2,-24, 4, 12, 1.2, o.col); else poly(c, [1.6,-23, 6.2,-23, 6,-17, 3.9,-12.6, 1.8,-17], o.col);
-      if (o.age === 2) circ(c, 4,-18, 1, '#d9a93a', .3); else line(c, 3.9,-22, 3.9,-14, '#f1d36a', .8);
-      if (atk){ hand(8,-19); line(c, 8,-19, 17,-19.5, STEEL, 1.3); line(c, 7.5,-21, 7.5,-17, '#d9a93a', 1); }
-      else { hand(6.5,-17); line(c, 6.5,-17, 9,-27, STEEL, 1.3); line(c, 5.2,-17.6, 7.8,-16.4, '#d9a93a', 1); }
+      if (o.age === 2){ rrect(c, 2,-24, 4, 12, 1.2, o.col); line(c, 2.6,-23, 5.4,-23, '#e8c25a', .5); line(c, 2.6,-13, 5.4,-13, '#e8c25a', .5); circ(c, 4,-18, 1.1, BRONZE, 0); }
+      else { poly(c, [1.6,-23, 6.2,-23, 6,-17, 3.9,-12.6, 1.8,-17], o.col); line(c, 3.9,-22, 3.9,-14, '#f1d36a', .8); line(c, 2.4,-20, 5.4,-20, '#f1d36a', .8); }
+      if (atk){ hand(8,-19); blade(c, 8.6,-19.1, 17.6,-19.5, .75, STEEL); line(c, 7.6,-21.1, 7.4,-16.9, OUT, 1.7); line(c, 7.6,-21.1, 7.4,-16.9, '#d9a93a', 1); }
+      else { hand(6.5,-17); blade(c, 6.9,-18.3, 9.2,-27.8, .75, STEEL); line(c, 5.1,-17.7, 7.9,-16.4, OUT, 1.7); line(c, 5.1,-17.7, 7.9,-16.4, '#d9a93a', 1); }
       break; }
     case 'bow': {
       hand(6,-20);
-      c.strokeStyle = WOOD2; c.lineWidth = 1.6; c.beginPath(); c.arc(5.4,-20, 8, -1.2, 1.2); c.stroke();
+      c.beginPath(); c.arc(5.4,-20, 8, -1.2, 1.2); c.strokeStyle = OUT; c.lineWidth = 2.6; c.stroke(); c.strokeStyle = WOOD; c.lineWidth = 1.5; c.stroke();
       const ax = 5.4 + 8*Math.cos(1.2), ay = 8*Math.sin(1.2), pull = atk ? 4 : 0;
       c.strokeStyle = '#efe4c8'; c.lineWidth = .6; c.beginPath(); c.moveTo(ax,-20 - ay); c.lineTo(5.4 - pull - 1,-20); c.lineTo(ax,-20 + ay); c.stroke();
-      if (atk) line(c, 5.4 - pull - 1,-20, 14,-20, WOOD, .8);
+      line(c, 13.3,-21, 13.4,-19, '#3b2a1d', 1.1);
+      if (atk){ shaft(c, 5.4 - pull - 1,-20, 13.4,-20, '#a8794a', .6); poly(c, [15,-20, 13.2,-21, 13.2,-19], STEEL, .35); }
       break; }
     case 'javelin':
       if (atk) hand(8,-23);
-      else { hand(2,-27); line(c, -5,-24, 11,-30.5, WOOD, 1.2); poly(c, [13,-31.3, 10,-31.6, 10.8,-29.4], STEEL, .3); }
+      else { hand(2,-27); shaft(c, -5,-24, 11,-30.5, WOOD, 1.1); poly(c, [13.4,-31.4, 10,-31.8, 10.8,-29.4], STEEL, .35); }
       break;
     case 'crossbow':
-      hand(5,-19.5); line(c, -1,-19, 10,-19.5, WOOD, 1.8); c.strokeStyle = STEEL; c.lineWidth = 1.2; c.beginPath(); c.arc(7,-19.5, 4, -1.1, 1.1); c.stroke();
-      if (!atk) line(c, 4,-19.6, 11,-19.6, '#3b2a1d', .7);
+      hand(5,-19.5); shaft(c, -1,-19, 10,-19.5, WOOD, 1.8);
+      c.beginPath(); c.arc(7,-19.5, 4, -1.1, 1.1); c.strokeStyle = OUT; c.lineWidth = 2.2; c.stroke(); c.strokeStyle = STEEL; c.lineWidth = 1.2; c.stroke();
+      line(c, 7 + 4*Math.cos(1.1), -19.5 - 4*Math.sin(1.1), atk ? 8.2 : 4.6, -19.5, '#efe4c8', .45); line(c, 7 + 4*Math.cos(1.1), -19.5 + 4*Math.sin(1.1), atk ? 8.2 : 4.6, -19.5, '#efe4c8', .45);
+      if (!atk){ line(c, 4,-19.8, 11,-19.8, '#3b2a1d', .8); poly(c, [12.2,-19.8, 10.8,-20.5, 10.8,-19.1], STEEL, .3); }
       break;
-    case 'pike':
-      if (atk){ hand(6,-20); line(c, -10,-20, 30,-21, WOOD, 1.3); poly(c, [34,-21, 29,-22.6, 29,-19.6], STEEL, .4); }
-      else { hand(3,-21); line(c, 1.5,-6, 5,-46, WOOD, 1.3); poly(c, [5.4,-50, 3.8,-45.4, 6.4,-45.6], STEEL, .4); }
-      break;
+    case 'pike': {
+      const a = o.age, head = a === 0 ? '#8f887c' : a <= 2 ? BRONZE : STEEL;
+      if (atk){ hand(6,-20); line(c, -10,-20, 30,-21, WOOD, 1.4); poly(c, [34.4,-21.1, 30.8,-22.4, 29,-21, 30.8,-19.6], head, .45);
+        if (a === 3){ poly(c, [27.4,-21, 27.8,-25, 30,-24.4, 29.4,-21], STEEL, .45); poly(c, [27.6,-20.9, 26.4,-18.6, 28.4,-20.8], STEEL, .35); } }
+      else { hand(3,-21); line(c, 1.5,-6, 5,-46, WOOD, 1.4); poly(c, [5.5,-50.4, 4,-47, 5,-45.2, 6.3,-46.8], head, .45);
+        if (a === 3){ poly(c, [5.1,-43.6, 9,-44.6, 8.6,-41.8, 5.3,-41.6], STEEL, .45); poly(c, [4.9,-43.6, 2.6,-45, 4.8,-42.4], STEEL, .35); }
+        if (a <= 1) line(c, 4.6,-44.6, 3.2,-41.6, o.col, .8); }
+      break; }
     case 'gun': {
       const dx = atk ? -1 : 0;
-      hand(5 + dx,-20); line(c, -1.5 + dx,-19.6, 9 + dx,-21.2, WOOD, 1.9); line(c, 5 + dx,-21, 15 + dx,-21.6, IRON, 1);
+      hand(5 + dx,-20);
+      poly(c, [-2.2 + dx,-18.3, -1.8 + dx,-20.7, 3 + dx,-20.6, 9.4 + dx,-21.7, 9.4 + dx,-20.7, 3.6 + dx,-19.6, 1.4 + dx,-18.6], WOOD, .5);
+      shaft(c, 5 + dx,-21.3, 15 + dx,-21.7, IRON, .9);
       break; }
     case 'bayonet': {
       const dx = atk ? 4 : 0;
-      hand(5 + dx,-18); line(c, -2 + dx,-16.8, 10 + dx,-18.6, WOOD, 1.8); line(c, 6 + dx,-18.5, 13 + dx,-19, IRON, 1); line(c, 13 + dx,-19, 17.5 + dx,-19.2, STEEL, .8);
+      hand(5 + dx,-18);
+      poly(c, [-2.6 + dx,-15.6, -2.2 + dx,-17.9, 3 + dx,-17.7, 10.4 + dx,-18.9, 10.4 + dx,-17.9, 3.6 + dx,-16.7, 1.2 + dx,-15.8], WOOD, .5);
+      shaft(c, 6 + dx,-18.6, 13 + dx,-19, IRON, .9); blade(c, 12.6 + dx,-19.1, 18 + dx,-19.3, .45, STEEL);
       break; }
     case 'mg':
-      hand(5,-18); rrect(c, 0,-20.2, 11, 3.2, .8, '#2e2f2b'); line(c, 11,-18.8, 17,-18.8, IRON, 1.2); line(c, 3,-17, 2,-12, '#8a7a3a', 1); circ(c, 9,-16.6, .7, '#2e2f2b', 0); break;
+      hand(5,-18); line(c, 3,-17, 2,-12, OUT, 1.8); line(c, 3,-17, 2,-12, '#a8913e', 1);
+      lines(c, [1.7,-16.6, 3.1,-16.3, 1.6,-15.5, 3,-15.2, 1.5,-14.4, 2.9,-14.1, 1.4,-13.3, 2.8,-13], '#7a6528', .4);
+      rrect(c, 0,-20.2, 11, 3.2, .8, '#3a3b36'); rrect(c, 7,-20.6, 6, 2.4, .8, '#4a4c46', 0);
+      c.setLineDash([.01, 1.6]); line(c, 8.4,-19.4, 11.8,-19.4, '#1d1d1b', .8); c.setLineDash([]);
+      shaft(c, 13,-18.8, 17,-18.8, IRON, 1); lines(c, [13.5,-18.7, 14.8,-16, 13.5,-18.7, 12.8,-16], '#2e2f2b', .6); break;
     case 'smg':
-      hand(5,-19.5); rrect(c, 1.5,-21, 7, 2.6, .6, '#262626'); rect(c, 4,-18.8, 1.4, 3, '#262626', .3); line(c, 8.5,-20, 11,-20, IRON, .9); break;
+      hand(5,-19.5); rrect(c, 1.5,-21, 7, 2.6, .6, '#2c2c2c'); rect(c, 4,-18.8, 1.4, 3, '#262626', 0); rect(c, -.6,-20.4, 2.4, 1.2, '#262626', 0);
+      shaft(c, 8.5,-20, 11,-20, IRON, .8); line(c, 2,-20.7, 8,-20.7, 'rgba(255,255,255,.3)', .3); break;
     case 'launcher':
-      hand(3,-22); rrect(c, -6,-26.6, 18, 3.4, 1, '#4a5132'); rect(c, 11,-27, 2, 4.2, '#2a2e1d', .4); break;
+      hand(3,-22); rrect(c, -6,-26.6, 18, 3.4, 1, '#4f5636');
+      rect(c, 11,-27, 2, 4.2, '#2a2e1d', .4); rect(c, -6.6,-26.9, 1.6, 4, '#2a2e1d', .4); rrect(c, 2,-28.4, 2.6, 1.8, .4, '#2b2b2b', 0); line(c, -4,-25.6, 10,-25.6, 'rgba(255,255,255,.22)', .5);
+      rect(c, 4.6, -23.4, 1.2, 2.4, '#2b2b2b', 0); break;
     case 'laser':
-      hand(5,-20); rrect(c, -.5,-21.6, 12, 2.8, 1.2, '#eef2f6'); line(c, 2,-20.2, 10,-20.2, o.hi, .8); circ(c, 12.6,-20.2, .9, o.hi, 0); break;
+      hand(5,-20); rrect(c, -.5,-21.6, 12, 2.8, 1.2, '#eef2f6'); line(c, 2,-20.2, 10,-20.2, o.hi, .8);
+      rrect(c, 3,-23, 4, 1.4, .5, '#c7ced8', 0); circ(c, 12.6,-20.2, 1.4, o.hi + '66', 0); circ(c, 12.6,-20.2, .9, o.hi, 0); break;
     case 'blade':
-      if (atk){ hand(8,-19); line(c, 8,-19, 21,-19.6, o.hi, 2); line(c, 8,-19, 21,-19.6, '#ffffff', .7); }
-      else { hand(6,-17); line(c, 6,-17, 9,-31, o.hi, 2); line(c, 6,-17, 9,-31, '#ffffff', .7); }
+      if (atk){ hand(8,-19); line(c, 8.6,-19, 21,-19.6, o.hi + '55', 4); line(c, 8.6,-19, 21,-19.6, o.hi, 2); line(c, 8.6,-19, 21,-19.6, '#ffffff', .7); rrect(c, 6.4,-20.2, 2.6, 2.4, .6, '#9aa6b4', .4); }
+      else { hand(6,-17); line(c, 6.3,-18, 9,-31, o.hi + '55', 4); line(c, 6.3,-18, 9,-31, o.hi, 2); line(c, 6.3,-18, 9,-31, '#ffffff', .7); rrect(c, 4.8,-18.4, 2.6, 2.4, .6, '#9aa6b4', .4); }
       break;
-    case 'saber':
-      if (atk){ hand(8,-20); c.strokeStyle = STEEL; c.lineWidth = 1.2; c.beginPath(); c.moveTo(8,-20); c.quadraticCurveTo(14,-22, 19,-19); c.stroke(); }
-      else { hand(5,-19); c.strokeStyle = STEEL; c.lineWidth = 1.2; c.beginPath(); c.moveTo(5,-19); c.quadraticCurveTo(5,-26, 9,-30); c.stroke(); }
-      break;
-    case 'lance':
-      hand(6,-18); line(c, -6,-16, atk ? 26 : 20, atk ? -18 : -27, WOOD, 1.5); if (o.age >= 3) poly(c, [-1,-14.6, 3,-18.6, 3,-14.4], STEEL, .4);
-      break;
-    case 'staff':
-      hand(4,-21); line(c, 4,-5, 6.5,-35, WOOD, 1.6); circ(c, 6.8,-36, 2.3, o.hi, .5);
-      if (atk) circ(c, 6.8,-36, 3.8, 'rgba(150,255,170,.5)', 0);
-      break;
+    case 'saber': {
+      const sab = (x0, y0, cx, cy, x1, y1) => { c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.lineCap = 'round'; c.strokeStyle = OUT; c.lineWidth = 2.1; c.stroke(); c.strokeStyle = STEEL; c.lineWidth = 1.1; c.stroke(); c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = .35; c.stroke(); };
+      if (atk){ hand(8,-20); sab(8.6,-20, 14,-22, 19,-19); line(c, 7.8,-21.6, 8.4,-18.6, '#d9a93a', .9); }
+      else { hand(5,-19); sab(5.3,-19.6, 5,-26, 9,-30); line(c, 3.9,-19.6, 6.4,-19.2, '#d9a93a', .9); }
+      break; }
+    case 'lance': {
+      const tx = atk ? 26 : 20, ty = atk ? -18 : -27;
+      hand(6,-18); line(c, -6,-16, tx, ty, WOOD, 1.6);
+      if (!atk){ c.beginPath(); c.moveTo(16.8,-25.6); c.lineTo(11.6,-26.2 + Math.sin((o.ph || 0)*2)*.6); c.lineTo(15.8,-23.4); c.closePath(); fs(c, o.col, .4); }
+      const L = Math.hypot(tx + 6, ty + 16), ux = (tx + 6)/L, uy = (ty + 16)/L;
+      poly(c, [tx + ux*2.8, ty + uy*2.8, tx - uy*.9, ty + ux*.9, tx + uy*.9, ty - ux*.9], STEEL, .35);
+      if (o.age >= 3) poly(c, [-1,-14.6, 3,-18.6, 3,-14.4], STEEL, .4);
+      break; }
+    case 'staff': {
+      hand(4,-21); shaft(c, 4,-5, 6.5,-34.4, WOOD, 1.5);
+      if (atk) circ(c, 6.8,-36, 4, 'rgba(150,255,170,.45)', 0);
+      if (o.age === 0){ for (const [x, a] of [[5.2, -.5], [8.4, .5]]) ell(c, x,-34.4, .7, 2, '#f4efe2', a, 0); }
+      circ(c, 6.8,-36, 2.3, o.hi, .5); circ(c, 7.6,-36.8, .6, '#ffffff', 0);
+      break; }
     case 'kit':
-      hand(4,-16); rrect(c, 1.5,-18.5, 7.5, 6, 1.2, o.col);
-      line(c, 5.25,-17.4, 5.25,-13.6, '#ffffff', 1.1); line(c, 3.3,-15.5, 7.2,-15.5, '#ffffff', 1.1);
-      break;
-    case 'tshield': towerShield(c, o, hand); break;
+      hand(5.4,-17.6);
+      c.beginPath(); c.arc(5.3,-16.4, 1.6, Math.PI, 0); c.strokeStyle = OUT; c.lineWidth = 1.1; c.stroke();
+      rrect(c, 1.6,-16.6, 7.4, 5.8, 1.2, o.col);
+      lines(c, [5.3,-15.6, 5.3,-11.8, 3.4,-13.7, 7.2,-13.7], '#ffffff', 1.1);
+      fist = null; circ(c, 5.4,-17.6, 1.1, sl[2], .6); break;
+    case 'tshield': towerShield(c, o, hand); fist = null; break;
     default: hand(3,-15);
   }
+  return fist;
 }
 // a big shield held up in front, made of whatever each age has to hand
 function towerShield(c, o, hand){
-  const a = o.age, x = 4.2, top = -29, bot = -5, w = 6.4;
+  const a = o.age, x = 4.2, top = -29, bot = -5, w = 6.4, my = (top + bot)/2;
   hand(x + 1, -18);
   switch (a){
     case 0:   // hide stretched on a frame of sticks
       rrect(c, x, top + 1, w, bot - top - 1, 2.4, '#a0703c', .8); line(c, x + .6, top + 2, x + w - .6, bot - 1, WOOD2, .9); line(c, x + w - .6, top + 2, x + .6, bot - 1, WOOD2, .9);
-      for (const yy of [top + 3, bot - 3]) line(c, x + 1, yy, x + w - 1, yy, '#6b4424', .5); break;
+      for (const yy of [top + 3, bot - 3]) line(c, x + 1, yy, x + w - 1, yy, '#6b4424', .5);
+      for (const [xx, yy] of [[x + 1.6, top + 7], [x + 4.6, my + 3]]) ell(c, xx, yy, .9, .6, 'rgba(70,40,15,.45)', 0, 0); break;
     case 1:   // woven wicker
-      ell(c, x + w/2, (top + bot)/2, w/2 + .4, (bot - top)/2, '#c9a35c', 0, .8);
-      for (let yy = top + 3; yy < bot - 1; yy += 2.2) line(c, x + 1, yy, x + w - 1, yy, '#9a7a3a', .5); circ(c, x + w/2, (top + bot)/2, 1.3, BRONZE, .5); break;
+      ell(c, x + w/2, my, w/2 + .4, (bot - top)/2, '#c9a35c', 0, .8);
+      for (let yy = top + 3; yy < bot - 1; yy += 2.2) line(c, x + 1, yy, x + w - 1, yy, '#9a7a3a', .5);
+      line(c, x + w/2, top + 1.5, x + w/2, bot - 1.5, o.col, .9); circ(c, x + w/2, my, 1.3, BRONZE, .5); break;
     case 2:   // curved scutum with a boss
-      rrect(c, x, top, w, bot - top, 1.6, vgrad(c, top, bot, shade(o.col, .2), shade(o.col, -.25)), .8);
-      line(c, x + w/2, top + 1.5, x + w/2, bot - 1.5, '#e8c25a', .7); line(c, x + 1, (top + bot)/2, x + w - 1, (top + bot)/2, '#e8c25a', .7); circ(c, x + w/2, (top + bot)/2, 1.5, BRONZE, .5); break;
+      rrect(c, x, top, w, bot - top, 1.6, o.col, .8);
+      line(c, x + w/2, top + 1.5, x + w/2, bot - 1.5, '#e8c25a', .7); line(c, x + 1, my, x + w - 1, my, '#e8c25a', .7); circ(c, x + w/2, my, 1.6, BRONZE, .5); break;
     case 3:   // kite shield with a steel rim
       c.beginPath(); c.moveTo(x, top + 2); c.quadraticCurveTo(x + w/2, top - 1.5, x + w, top + 2); c.lineTo(x + w, top + 13); c.quadraticCurveTo(x + w*.7, bot - 2, x + w/2, bot); c.quadraticCurveTo(x + w*.3, bot - 2, x, top + 13); c.closePath();
-      fs(c, o.col, 1.3); c.strokeStyle = STEEL; c.lineWidth = .6; c.stroke(); line(c, x + w/2, top + 2, x + w/2, bot - 3, '#f1d36a', .8); break;
+      fs(c, o.col, 1.3); c.strokeStyle = STEEL; c.lineWidth = .6; c.stroke(); line(c, x + w/2, top + 2, x + w/2, bot - 3, '#f1d36a', .8); line(c, x + 1.2, top + 7, x + w - 1.2, top + 7, '#f1d36a', .8); break;
     case 4:   // painted wooden pavise
       rrect(c, x, top - 1, w, bot - top + 1, .8, '#9a6a38', .8); rect(c, x + w*.3, top - 1, w*.4, bot - top + 1, o.col, .4); circ(c, x + w/2, top + 6, 1.2, '#e8c25a', .4); break;
     case 5:   // iron-banded planks
-      rect(c, x, top, w, bot - top, vgrad(c, top, bot, '#8a6038', '#5e3e22'), .8);
-      for (const yy of [top + 3, (top + bot)/2, bot - 3]) line(c, x, yy, x + w, yy, IRON, 1.1); rect(c, x + 1, top + 5.5, w - 2, 1.4, o.col, .3); break;
+      rect(c, x, top, w, bot - top, '#7a5434', .8); line(c, x + w/2, top, x + w/2, bot, 'rgba(40,24,10,.45)', .5);
+      for (const yy of [top + 3, my, bot - 3]){ line(c, x, yy, x + w, yy, IRON, 1.1); circ(c, x + 1, yy, .35, '#c9ccd2', 0); } rect(c, x + 1, top + 5.5, w - 2, 1.4, o.col, .3); break;
     case 6: case 7:   // steel plate with a vision slit
-      rrect(c, x, top, w, bot - top, a === 6 ? 1 : .4, vgrad(c, top, bot, '#9da2a8', '#5f646b'), .9);
+      rrect(c, x, top, w, bot - top, a === 6 ? 1 : .4, '#868b92', .9);
       rect(c, x + 1.2, top + 4, w - 2.4, 1, '#1d1d1d', 0); for (const yy of [top + 1.5, bot - 1.5]) for (const xx of [x + 1, x + w - 1]) circ(c, xx, yy, .45, '#3a3d42', 0);
-      if (a === 7) rect(c, x + .6, bot - 6, w - 1.2, 1.3, o.col, .3); break;
+      rect(c, x + .6, bot - 6, w - 1.2, 1.3, o.col, .3); break;
     case 8:   // clear riot shield
-      rrect(c, x, top, w, bot - top, 1.2, 'rgba(190,225,245,.55)', .9); rect(c, x + .8, top + 6, w - 1.6, 1.6, o.col, 0); line(c, x + 1.2, top + 2, x + 1.2, bot - 2, 'rgba(255,255,255,.7)', .6); break;
+      rrect(c, x, top, w, bot - top, 1.2, 'rgba(190,225,245,.55)', .9); rect(c, x + .8, top + 6, w - 1.6, 1.6, o.col, 0); line(c, x + 1.2, top + 2, x + 1.2, bot - 2, 'rgba(255,255,255,.7)', .6); line(c, x + 2.2, top + 2, x + 2.2, top + 9, 'rgba(255,255,255,.5)', .4); break;
     default: {   // energy barrier
-      const g = c.createLinearGradient(x, 0, x + w + 2, 0); g.addColorStop(0, o.hi + 'cc'); g.addColorStop(1, o.hi + '22');
-      c.fillStyle = g; c.beginPath(); c.ellipse(x + w/2, (top + bot)/2, w/2 + 1.2, (bot - top)/2 + 1, 0, 0, Math.PI*2); c.fill();
-      c.strokeStyle = '#ffffff'; c.lineWidth = .7; c.stroke(); rrect(c, x - 1, -20, 2.4, 4, .6, '#eef2f6', .5); }
+      const g = fgrad('aegis' + o.hi, () => { const g = c.createLinearGradient(x, 0, x + w + 2, 0); g.addColorStop(0, o.hi + 'cc'); g.addColorStop(1, o.hi + '22'); return g; });
+      c.fillStyle = g; c.beginPath(); c.ellipse(x + w/2, my, w/2 + 1.2, (bot - top)/2 + 1, 0, 0, Math.PI*2); c.fill();
+      c.strokeStyle = '#ffffff'; c.lineWidth = .7; c.stroke(); line(c, x + w/2 + 2.4, top + 4, x + w/2 + 3, my, 'rgba(255,255,255,.7)', .5); rrect(c, x - 1, -20, 2.4, 4, .6, '#eef2f6', .5); }
   }
 }
-function rider(c, o, x, backY, w){
-  c.save(); c.translate(x, backY + 13.3); c.scale(.85, .85); person(c, {...o, w}, true); c.restore();
+function rider(c, o, x, backY, w, seat = true){
+  c.save(); c.translate(x, backY + 13.3); c.scale(.85, .85); person(c, {...o, w, seat}, true); c.restore();
 }
 /* ---- mounts ---- */
-function legs4(c, ph, xs, top, len, col, wd){
-  xs.forEach((x, k) => { const sw = Math.sin(ph + (k % 3 ? Math.PI : 0))*4; limb(c, x, top, x + sw*.5, top + len*.55, col, wd); limb(c, x + sw*.5, top + len*.55, x + sw, top + len, col, wd*.9); });
+// four legs with a knee (hind legs bend back at the hock) and a lifted foot on the forward swing; the far pair is darker,
+// and each pair is outlined and colored in one stroke
+const LEG4 = new Array(24).fill(0);
+function legs4(c, ph, xs, top, len, col, wd, foot, bend = 1){
+  const J = LEG4;
+  for (let k = 0; k < 4; k++){
+    const p = ph + (k % 3 ? Math.PI : 0), sw = Math.sin(p)*4, lift = Math.max(0, Math.cos(p))*len*.1, x = xs[k];
+    J[k*6] = x; J[k*6+1] = top; J[k*6+2] = x + sw*.45 + (k < 2 ? -1.3 : .6)*bend; J[k*6+3] = top + len*.52 - lift*.4; J[k*6+4] = x + sw; J[k*6+5] = top + len - lift;
+  }
+  c.lineCap = 'butt'; c.lineJoin = 'round';
+  const nails = bend < .5;
+  for (let far = 1; far >= 0; far--){
+    const a = far ? 0 : 1, b = far ? 2 : 3;
+    c.beginPath();
+    for (const k of [a, b]){ c.moveTo(J[k*6], J[k*6+1]); c.lineTo(J[k*6+2], J[k*6+3]); c.lineTo(J[k*6+4], J[k*6+5]); }
+    c.strokeStyle = OUT; c.lineWidth = wd + 1.3; c.stroke(); c.strokeStyle = far ? shade(col, -.2) : col; c.lineWidth = wd; c.stroke();
+    if (!foot) continue;
+    c.beginPath();
+    for (const k of [a, b]){ const x = J[k*6+4], y = J[k*6+5];
+      if (nails) for (const dx of [-.4, 1.6]){ c.moveTo(x + dx + .8, y - .7); c.ellipse(x + dx, y - .7, .8, .6, 0, 0, Math.PI*2); }
+      else c.rect(x - wd*.6, y - wd*.55, wd*1.25, wd*.55); }
+    fs(c, foot, .45);
+  }
+  c.lineCap = 'round';
 }
+const HORSE = new Path2D('M-11 -23 C-6 -26.6 2 -24 7 -25.2 C11 -25.8 13.2 -21 11.6 -17 C9.4 -13.4 -6 -13 -9.6 -15 C-13.6 -16.6 -13.6 -21.6 -11 -23 Z');
+const HORSE_HEAD = new Path2D('M5 -23.5 L6.4 -26.2 Q9 -32 12 -35.4 Q14.6 -36.2 17.2 -33.2 L19.7 -30.6 Q20.2 -28.6 18.4 -28.5 L15.4 -29.3 Q13.4 -30 13.2 -28.2 Q12.6 -23 12 -19.4 Z');
+const HORSE_SH = new Path2D('M11.6 -17 C9.4 -13.4 -6 -13 -9.6 -15 C-4 -16.2 6 -16.4 11.6 -17 Z'), HORSE_LIT = new Path2D('M-9 -23.4 C-5 -25.5 1 -23.9 6 -24.9');
+const WOLF_SH = new Path2D('M8 -9.6 C4 -9.2 -1 -11.4 -5 -10.2 C-9 -9.6 -11.8 -11 -10.6 -13.4 C-6 -12.6 2 -12.6 8 -9.6 Z');
+const WOLF = new Path2D('M-10.6 -13.4 C-7 -17.8 3 -17.8 8.6 -17 C11.6 -16 11.2 -10.6 8 -9.6 C4 -9.2 -1 -11.4 -5 -10.2 C-9 -9.6 -11.8 -11 -10.6 -13.4 Z');
 const MOUNT = {
   wolf(c, o, w){
-    legs4(c, o.ph*1.3, [-7,-4,6,9], -9, 9, '#6b6359', 2);
-    c.beginPath(); c.moveTo(-10,-12); c.quadraticCurveTo(-17,-15,-18,-20); c.lineWidth = 2.4; c.strokeStyle = OUT; c.stroke(); c.lineWidth = 1.6; c.strokeStyle = '#7d746a'; c.stroke();
-    ell(c, 0,-12, 11, 4.8, vgrad(c, -17, -7, '#9a9086', '#5e564d'));
-    ell(c, 11,-15.5, 4.4, 3.2, '#857b70', -.3);
-    poly(c, [14,-16.5, 19.5,-14.6, 14.2,-13.4], '#857b70', .6);
-    poly(c, [9,-18, 9.6,-21.6, 11.6,-18.4], '#6b6359', .5);
-    circ(c, 13,-16.2, .5, '#f2d24a', 0);
+    const wag = Math.sin((o.ph || 0)*2.6)*1.2, fur = '#857b70';
+    legs4(c, o.ph*1.3, [-7,-4,6,9], -10, 10, '#6b6359', 1.9, '#3a342e');
+    c.beginPath(); c.moveTo(-10,-13.4); c.quadraticCurveTo(-15,-14.6, -18.4,-20 + wag); c.quadraticCurveTo(-16.6,-15.6 + wag*.4, -10.4,-11.4); fs(c, '#7d746a', .7);
+    poly(c, [-17.6,-19 + wag, -18.4,-20 + wag, -16.8,-18.6 + wag*.8], '#e8e2d8', 0);
+    c.fillStyle = '#8f857a'; c.fill(WOLF); c.fillStyle = SHADOW; c.fill(WOLF_SH); c.strokeStyle = OUT; c.lineWidth = .8; c.stroke(WOLF);
+    lines(c, [7.8,-15.6, 9.4,-13.8, 6.4,-15.8, 7.6,-13.6, -6.8,-15.2, -5.6,-14.2], 'rgba(255,255,255,.35)', .5);
+    poly(c, [10.6,-19.6, 11.2,-23, 12.8,-19.8], shade(fur, -.25), .5);
+    if (o.atk){
+      poly(c, [14,-14.6, 18.8,-13.4, 18.4,-12.4, 13.6,-12.4], '#6f665c', .6);
+      lines(c, [15.4,-13.8, 15.6,-14.6, 17.4,-13.4, 17.6,-14.2], '#ffffff', .5);
+    }
+    c.beginPath(); c.moveTo(8.4,-17.6); c.quadraticCurveTo(10.6,-20.6, 13.2,-19.2); c.lineTo(19.8,-16.2); c.quadraticCurveTo(20.4,-14.9, 19.2,-14.6);
+    if (o.atk){ c.lineTo(15,-14.8); } else c.lineTo(14.6,-14.2);
+    c.quadraticCurveTo(11.4,-12.2, 9.2,-14); c.closePath(); fs(c, fur);
+    poly(c, [11.8,-19.6, 12.4,-23.2, 14,-19.4], fur, .5); poly(c, [12.3,-19.8, 12.6,-21.8, 13.3,-19.7], '#c9a090', 0);
+    circ(c, 19.7,-15.9, .6, OUT, 0); ell(c, 14.2,-17.4, .7, .5, '#f2d24a', -.3, .3); circ(c, 14.4,-17.4, .25, OUT, 0);
+    lines(c, [13.2,-17.8, 15.2,-18.6], OUT, .45);
+    poly(c, [-4.8,-17.4, 4,-17.6, 3.6,-14.2, -4.4,-14.4], o.col, .5); line(c, -4.4,-14.6, 3.6,-14.4, o.hi, .5);
     rider(c, o, -1, -15, w);
   },
   mammoth(c, o, w){
-    legs4(c, o.ph*.7, [-15,-8,8,14], -20, 20, '#4f321c', 6);
-    ell(c, 0,-29, 22, 15, vgrad(c, -44, -14, '#8a5a32', '#4e3018'));
-    c.strokeStyle = 'rgba(40,20,8,.6)'; c.lineWidth = .7;
-    for (let x = -18; x < 18; x += 3){ c.beginPath(); c.moveTo(x,-22); c.lineTo(x - 1,-14 - (x % 2 ? 1 : 0)); c.stroke(); }
-    circ(c, 19,-35, 10, vgrad(c, -45, -25, '#8a5a32', '#5a381e'));
+    const hair = '#6a4426';
+    legs4(c, o.ph*.7, [-15,-8,8,14], -20, 20, '#4f321c', 6, '#e2d6bc', .3);
+    ell(c, 0,-29, 22, 15, '#76492a');
+    poly(c, [-20,-22, -17,-12, -14,-17, -11,-11, -8,-16, -5,-10.6, -2,-15.6, 1,-10.6, 4,-15.6, 7,-11, 10,-16, 13,-11.6, 16,-17, 19,-14, 20,-22], '#5a3820', .7);
+    lines(c, [-14,-34, -15,-26, -8,-38, -9,-29, -2,-40, -3,-31, 4,-39, 3,-30, 10,-36, 9,-28, -18,-24, -19,-18, -11,-23, -12,-16, -4,-24, -5,-17, 3,-24, 2,-17, 10,-23, 9,-17], 'rgba(40,20,8,.5)', .7);
+    lines(c, [-10,-41, -2,-43, 2,-43, 9,-41], 'rgba(255,220,170,.28)', 1);
+    circ(c, 19,-35, 10, '#7f522c'); crescent(c, 19,-35, 10, -.6, 4, SHADOW);
     c.strokeStyle = OUT; c.lineWidth = 6.2; c.beginPath(); c.moveTo(26,-30); c.quadraticCurveTo(31,-14, 27,-4); c.stroke();
     c.strokeStyle = '#6a4426'; c.lineWidth = 4.8; c.stroke();
-    c.strokeStyle = OUT; c.lineWidth = 3.2; c.beginPath(); c.moveTo(24,-27); c.quadraticCurveTo(38,-22, 36,-34); c.stroke();
-    c.strokeStyle = '#efe6d0'; c.lineWidth = 2.2; c.stroke();
-    circ(c, 23,-37, 1, OUT, 0);
-    rect(c, -12,-46, 18, 4, o.col, .6);
-    rider(c, o, -3, -46, w);
+    lines(c, [27.6,-24, 29.6,-24.6, 28.8,-18, 30.8,-18.2, 28.6,-12, 30.4,-11.6], 'rgba(40,20,8,.45)', .6);
+    c.strokeStyle = OUT; c.lineWidth = 3.4; c.beginPath(); c.moveTo(24,-27); c.quadraticCurveTo(38,-22, 36,-34); c.stroke();
+    c.strokeStyle = '#efe6d0'; c.lineWidth = 2.3; c.stroke(); c.strokeStyle = 'rgba(160,140,110,.6)'; c.lineWidth = .7; c.beginPath(); c.moveTo(25,-26.2); c.quadraticCurveTo(36.6,-22.6, 35.6,-31); c.stroke();
+    circ(c, 23,-37, 1.1, OUT, 0); line(c, 21.4,-39, 24.4,-38.8, 'rgba(40,20,8,.7)', .6);
+    rect(c, -12,-46, 18, 4, o.col, .6); line(c, -12,-42.6, 6,-42.6, o.hi, .7);
+    rider(c, o, -3, -46, w, false);
   },
   camel(c, o, w){
-    legs4(c, o.ph, [-9,-5,7,11], -18, 18, '#a87d46', 2.4);
-    ell(c, 1,-21, 13.5, 6.2, vgrad(c, -27, -15, '#ddb57a', '#a87c44'));
-    ell(c, -1,-26, 6.5, 5.5, '#d0a76c');
-    c.strokeStyle = OUT; c.lineWidth = 5.8; c.beginPath(); c.moveTo(11,-22); c.quadraticCurveTo(17,-25, 16,-33); c.stroke();
-    c.strokeStyle = '#c99d60'; c.lineWidth = 4.4; c.stroke();
-    ell(c, 19.5,-34, 4.6, 2.6, '#c99d60', .15);
-    circ(c, 20.5,-35, .5, OUT, 0);
+    legs4(c, o.ph, [-9,-5,7,11], -18, 18, '#a87d46', 2.4, '#6b4a26', .8);
+    c.beginPath(); c.moveTo(-13,-20); c.bezierCurveTo(-13,-25, -9,-27, -6,-28); c.bezierCurveTo(-3,-34, 4,-34, 6,-27.4); c.bezierCurveTo(10,-27, 14,-25, 14,-21);
+    c.bezierCurveTo(14,-16, 8,-15.2, 2,-15.4); c.bezierCurveTo(-5,-15.4, -13,-15, -13,-20); c.closePath(); fs(c, '#cfa468'); ell(c, .5,-18.2, 11, 2.4, SHADOW, 0, 0);
+    c.beginPath(); c.moveTo(-12.6,-21); c.quadraticCurveTo(-15,-20, -14.6,-14); c.strokeStyle = OUT; c.lineWidth = 1.8; c.stroke(); c.strokeStyle = '#8a6a40'; c.lineWidth = .9; c.stroke();
+    c.strokeStyle = OUT; c.lineWidth = 5.8; c.beginPath(); c.moveTo(11,-22); c.quadraticCurveTo(18,-23, 16,-33); c.stroke();
+    c.strokeStyle = '#c99d60'; c.lineWidth = 4.4; c.stroke(); line(c, 12.4,-23.6, 16.6,-26.6, 'rgba(110,70,30,.35)', 1.2);
+    c.beginPath(); c.moveTo(14.6,-34.4); c.quadraticCurveTo(16.4,-37, 20,-35.6); c.lineTo(22.6,-33.6); c.quadraticCurveTo(23,-32, 21.4,-31.8); c.lineTo(17,-31.6); c.quadraticCurveTo(14.6,-31.4, 14.6,-34.4); c.closePath(); fs(c, '#c99d60');
+    poly(c, [15.4,-35.4, 15.6,-37.2, 16.6,-35.8], '#b48a50', .4);
+    circ(c, 19,-34.6, .55, OUT, 0); line(c, 18.2,-35.6, 19.8,-35.4, OUT, .4); line(c, 21.6,-32.6, 22.6,-32.8, OUT, .4);
     ell(c, -1,-28, 7.6, 3.6, o.col);
-    for (let x = -7; x < 6; x += 1.6) line(c, x,-25.2, x,-23.4, '#e8c25a', .6);
+    lines(c, [-7,-25.2, -7,-23.2, -5.4,-25.2, -5.4,-23.2, -3.8,-25.2, -3.8,-23.2, -2.2,-25.2, -2.2,-23.2, -.6,-25.2, -.6,-23.2, 1,-25.2, 1,-23.2, 2.6,-25.2, 2.6,-23.2, 4.2,-25.2, 4.2,-23.2], '#e8c25a', .6);
+    line(c, 20.8,-32.4, 4,-29, '#5a3a1f', .45);
     rider(c, o, -1, -30, w);
   },
   horse(c, o, w){
-    legs4(c, o.ph*1.2, [-8,-5,7,10], -17, 17, '#5e3e24', 2.2);
-    c.beginPath(); c.moveTo(-11,-21); c.quadraticCurveTo(-17,-20,-16,-11); c.lineWidth = 2.8; c.strokeStyle = OUT; c.stroke(); c.lineWidth = 1.8; c.strokeStyle = '#2b1a10'; c.stroke();
-    ell(c, 0,-20, 12, 5.6, vgrad(c, -26, -14, '#9a6a40', '#5e3e24'));
-    poly(c, [7,-23, 10,-25, 15,-33, 12,-35, 8,-26], '#8a5c36');
-    ell(c, 15.6,-32, 4.8, 2.3, '#8a5c36', .55);
-    line(c, 8,-25, 12.6,-34.4, '#2b1a10', 1.4);
-    circ(c, 15.4,-33.2, .5, OUT, 0);
+    const coat = '#7a5030', mane = '#2b1a10', sway = Math.sin((o.ph || 0)*1.2)*1.2;
+    legs4(c, o.ph*1.2, [-8,-5,7,10], -17, 17, '#5e3e24', 2.2, '#2b1d14');
+    c.beginPath(); c.moveTo(-12,-22.6); c.quadraticCurveTo(-17.6 - sway,-21, -16.6 - sway,-10.6); c.quadraticCurveTo(-15,-15.4, -12.2,-19.2); c.closePath(); fs(c, mane, .7);
+    c.fillStyle = coat; c.fill(HORSE); c.fillStyle = SHADOW; c.fill(HORSE_SH); c.strokeStyle = LIGHT; c.lineWidth = 1; c.stroke(HORSE_LIT); c.strokeStyle = OUT; c.lineWidth = .8; c.stroke(HORSE);
+    lines(c, [-10.6,-21, -9.4,-17.2, 9.8,-21.6, 10.8,-18.4], 'rgba(40,20,8,.35)', .6);
+    c.fillStyle = '#86592f'; c.fill(HORSE_HEAD); c.stroke(HORSE_HEAD);
+    c.beginPath(); c.moveTo(12.6,-35.8); c.quadraticCurveTo(9.2,-33.4, 5.6,-26.4); c.lineTo(4.4,-24.4); c.lineTo(4.6,-27.6); c.lineTo(5.8,-30.4); c.lineTo(6.8,-30); c.lineTo(8.4,-33.4); c.lineTo(9.6,-33); c.lineTo(11.4,-35.8); c.closePath(); fs(c, mane, .5);
+    poly(c, [12.4,-35, 13.2,-38.2, 14.4,-35.4], '#86592f', .5);
+    ell(c, 15.6,-32.6, .55, .7, OUT, -.3, 0); circ(c, 19,-29.8, .38, OUT, 0); line(c, 17.6,-31.6, 19.2,-31.2, 'rgba(255,255,255,.3)', .5);
+    lines(c, [13.6,-34.4, 17.6,-29.2, 16.4,-31.6, 19.4,-31.4], '#3b2a18', .6); line(c, 18,-29.6, 3.4,-26, '#3b2a18', .45);
     if (o.armor){
-      c.beginPath(); c.moveTo(-11,-23); c.lineTo(9,-23); c.lineTo(11,-13); c.lineTo(-12,-13); c.closePath(); fs(c, o.col, .6);
-      for (let x = -11; x < 11; x += 2.4) line(c, x,-13.4, x + .6,-12, '#e8c25a', .7);
-      poly(c, [12.4,-34.6, 18.6,-31, 17.4,-30, 12,-31.6], STEEL, .4);
-    } else rect(c, -5,-25.6, 9, 3, o.col, .5);
+      c.beginPath(); c.moveTo(-11.6,-23.4); c.lineTo(9.6,-23.6); c.lineTo(11.6,-13); c.lineTo(-12.4,-13); c.closePath(); fs(c, o.col, .6);
+      line(c, -11.4,-21.6, 10,-21.8, o.hi, .7); civEmblemLite(c, -1, -18, o.hi);
+      lines(c, [-11,-13.4, -10.4,-12, -8.6,-13.4, -8,-12, -6.2,-13.4, -5.6,-12, -3.8,-13.4, -3.2,-12, -1.4,-13.4, -.8,-12, 1,-13.4, 1.6,-12, 3.4,-13.4, 4,-12, 5.8,-13.4, 6.4,-12, 8.2,-13.4, 8.8,-12, 10.6,-13.4, 11.2,-12], '#e8c25a', .7);
+      poly(c, [12.4,-34.6, 18.8,-31, 17.4,-29.8, 12,-31.6], STEEL, .4);
+    } else {
+      poly(c, [-6,-25.4, 4.6,-25.8, 4.2,-20.4, -5.6,-20.6], o.col, .5); line(c, -5.6,-21, 4.2,-20.8, o.hi, .6);
+      line(c, 1,-22, 1.6,-15.6, '#3b2a18', .6); rect(c, .6,-16.2, 1.8, 1, STEEL, .3);
+    }
     rider(c, o, -1, -25, w);
   },
   elephant(c, o, w){
-    legs4(c, o.ph*.7, [-14,-7,8,14], -20, 20, '#77737b', 6);
-    ell(c, 0,-27, 21, 13.5, vgrad(c, -40, -14, '#a8a5ad', '#6c6970'));
-    c.strokeStyle = 'rgba(40,40,45,.35)'; c.lineWidth = .6; for (let k = 0; k < 4; k++){ c.beginPath(); c.arc(-8 + k*5,-20, 5, .3, 1.4); c.stroke(); }
-    circ(c, 20,-31, 9.5, vgrad(c, -40, -22, '#a8a5ad', '#7a777f'));
+    const hide = '#97949c';
+    legs4(c, o.ph*.7, [-14,-7,8,14], -20, 20, '#77737b', 6, '#e4dccb', .3);
+    c.strokeStyle = OUT; c.lineWidth = 1.8; c.beginPath(); c.moveTo(-20.4,-28); c.quadraticCurveTo(-24,-24, -23,-17); c.stroke(); c.strokeStyle = hide; c.lineWidth = .9; c.stroke();
+    ell(c, 0,-27, 21, 13.5, '#99969f'); ell(c, 0,-19.8, 17, 6, SHADOW, 0, 0);
+    c.strokeStyle = 'rgba(40,40,45,.35)'; c.lineWidth = .6; c.beginPath(); for (let k = 0; k < 4; k++){ c.moveTo(-8 + k*5 + Math.cos(.3)*5, -20 + Math.sin(.3)*5); c.arc(-8 + k*5,-20, 5, .3, 1.4); } c.stroke();
+    lines(c, [-14,-37, -4,-39.6, 4,-39.6, 12,-37.6], 'rgba(255,255,255,.3)', 1.1);
+    circ(c, 20,-31, 9.5, '#9c99a1'); crescent(c, 20,-31, 9.5, -.6, 3.6, SHADOW);
     c.strokeStyle = OUT; c.lineWidth = 6.2; c.beginPath(); c.moveTo(27,-28);
     if (o.atk) c.quadraticCurveTo(38,-34, 41,-42); else c.quadraticCurveTo(32,-18, 29,-6);
     c.stroke(); c.strokeStyle = '#8c8990'; c.lineWidth = 4.8; c.stroke();
     line(c, 24,-24, 31,-21, OUT, 3); line(c, 24,-24, 31,-21, '#f2ead8', 2);
-    ell(c, 14,-30, 6, 9, vgrad(c, -39, -21, '#8a8790', '#64616a'));
-    circ(c, 23,-33, 1.1, OUT, 0);
+    c.beginPath(); c.moveTo(13,-38.6); c.bezierCurveTo(19,-40, 19.6,-28, 18,-24); c.bezierCurveTo(16,-20.6, 9.4,-22, 8.6,-27); c.bezierCurveTo(8.2,-32, 9.6,-37.6, 13,-38.6); c.closePath(); fs(c, '#8a8790');
+    line(c, 10.6,-35, 10.2,-26, 'rgba(60,40,60,.3)', 1.2);
+    circ(c, 23,-33, 1.1, OUT, 0); line(c, 21.6,-35, 24.4,-34.8, 'rgba(40,40,45,.8)', .6);
     c.beginPath(); c.moveTo(-15,-38); c.lineTo(9,-38); c.lineTo(9,-24); c.lineTo(-15,-24); c.closePath(); fs(c, o.col, .6);
-    for (let x = -15; x < 9; x += 3) line(c, x,-24, x,-22, '#e8c25a', 1.2);
-    if (o.armor){ poly(c, [12,-40, 26,-37, 28,-30, 14,-28], STEEL, .5); for (let x = -13; x < 8; x += 5) rect(c, x,-36, 3.6, 10, '#9ea2aa', .4); }
-    rect(c, -12,-47, 17, 9, WOOD); for (let x = -11; x < 5; x += 3) line(c, x,-47, x,-41, WOOD2, .6);
-    rider(c, o, -4, -45, w);
+    line(c, -14.6,-36.6, 8.6,-36.6, o.hi, .7); civEmblemLite(c, -3, -31, o.hi);
+    lines(c, [-15,-24, -15,-22, -12,-24, -12,-22, -9,-24, -9,-22, -6,-24, -6,-22, -3,-24, -3,-22, 0,-24, 0,-22, 3,-24, 3,-22, 6,-24, 6,-22], '#e8c25a', 1.2);
+    if (o.armor){ poly(c, [12,-40, 26,-37, 28,-30, 14,-28], STEEL, .5); c.beginPath(); for (let x = -13; x < 8; x += 5) c.rect(x,-36, 3.6, 10); fs(c, '#9ea2aa', .4); }
+    rect(c, -12,-47, 17, 9, WOOD); lines(c, [-11,-47, -11,-41, -8,-47, -8,-41, -5,-47, -5,-41, -2,-47, -2,-41, 1,-47, 1,-41, 4,-47, 4,-41], WOOD2, .6);
+    rider(c, o, -4, -45, w, false);
   }
 };
+// a simple team badge for cloths and banners
+function civEmblemLite(c, x, y, col){ c.beginPath(); c.moveTo(x, y - 2.2); c.lineTo(x + 2, y); c.lineTo(x, y + 2.2); c.lineTo(x - 2, y); c.closePath(); fs(c, col, .4); }
 /* ---- vehicles ---- */
 const VEH = {
   ram(c, o){
     wheel(c, -12,-4.5, 4.5, o.ph); wheel(c, 4,-4.5, 4.5, o.ph); wheel(c, 18,-4.5, 4.5, o.ph);
     const push = o.atk ? 6 : 0;
-    line(c, -16,-14, 30 + push,-14, OUT, 5.4); line(c, -16,-14, 30 + push,-14, WOOD, 4.2);
-    rrect(c, 29 + push,-17, 5, 6, 1.2, IRON, .6);
-    poly(c, [-20,-9, 24,-9, 15,-30, -11,-30], vgrad(c, -30, -9, '#9a7a52', '#6a4e30'));
-    for (let k = 0; k < 4; k++) line(c, -16 + k*2.4,-12 - k*4.5, 20 - k*2.2,-12 - k*4.5, 'rgba(40,24,10,.5)', .6);
+    line(c, -16,-14, 30 + push,-14, OUT, 5.4); line(c, -16,-14, 30 + push,-14, WOOD, 4.2); line(c, -15,-15, 29 + push,-15, 'rgba(255,230,190,.3)', 1);
+    rrect(c, 29 + push,-17.4, 5.6, 6.8, 2, IRON, .6); poly(c, [33.4 + push,-16.6, 36.2 + push,-14, 33.4 + push,-11.4], '#3e4146', .5); line(c, 30 + push,-16.4, 33 + push,-16.4, 'rgba(255,255,255,.35)', .6);
+    poly(c, [-20,-9, 24,-9, 15,-30, -11,-30], '#8a6a46');
+    poly(c, [-20,-9, -11,-30, -6,-30, -14,-9], SHADOW, 0); poly(c, [24,-9, 15,-30, 13.4,-30, 21.6,-9], LIGHT, 0);
+    lines(c, [-16.4,-12, 20,-12, -14.6,-16.5, 18.2,-16.5, -12.6,-21, 16.2,-21, -11,-25.5, 14,-25.5], 'rgba(40,24,10,.45)', .6);
+    lines(c, [-4,-29.6, -9,-9.4, 8,-29.6, 12,-9.4], '#4a3420', .9);
+    rivets(c, -14.8,-12, 19,-12, 4); line(c, -11,-30, 15,-30, '#4a3420', 1);
     line(c, 2,-30, 2,-42, WOOD2, 1); poly(c, [2,-42, 12,-39, 2,-36], o.col, .5);
   },
   wagon(c, o){
     wheel(c, -10,-6.5, 6.5, o.ph, WOOD, 6); wheel(c, 10,-6.5, 6.5, o.ph, WOOD, 6);
-    rect(c, -18,-24, 36, 14, vgrad(c, -24, -10, '#9a7044', '#6a4a2a'));
-    for (let y = -21; y < -10; y += 3.4) line(c, -18, y, 18, y, 'rgba(40,24,10,.5)', .6);
-    rect(c, -18,-26, 36, 3, o.col, .5);
-    line(c, 14,-20, 26 + (o.atk ? -2 : 0),-21, IRON, 2.6);
-    circ(c, -5,-27, 3, SKIN); hatDraw(c, 'morion', {...o, col:o.col});
+    rect(c, -18,-24, 36, 14, '#8a6440');
+    rect(c, -18,-24, 36, 1.4, LIGHT, 0); rect(c, -18,-12.4, 36, 2.4, SHADOW, 0);
+    lines(c, [-18,-20.6, 18,-20.6, -18,-17.2, 18,-17.2, -18,-13.8, 18,-13.8], 'rgba(40,24,10,.5)', .6);
+    lines(c, [-12,-23.6, -12,-10.4, 0,-23.6, 0,-10.4, 12,-23.6, 12,-10.4], IRON, 1); rivets(c, -12,-22, -12,-11, 2.6, '#c9ccd2', .35); rivets(c, 12,-22, 12,-11, 2.6, '#c9ccd2', .35);
+    rect(c, -18,-26, 36, 3, o.col, .5); line(c, -17.6,-25.6, 17.6,-25.6, o.hi, .5);
+    for (const x of [-15, -7, 1]) rect(c, x, -21.6, 3, 2, '#2a1a0c', 0);
+    line(c, 14,-20, 26 + (o.atk ? -2 : 0),-21, OUT, 3.4); line(c, 14,-20, 26 + (o.atk ? -2 : 0),-21, IRON, 2.4);
+    c.save(); c.translate(-5, -1.2); face(c, {...o, w:'gun', atk:false}); hatDraw(c, 'morion', o); c.restore();
   },
   steam(c, o){
     tracks(c, -22, 44, 9, o.ph);
-    poly(c, [-20,-9, 21,-9, 17,-28, -16,-28], vgrad(c, -28, -9, '#7d766f', '#4e4945'));
-    for (let x = -14; x < 16; x += 5){ circ(c, x,-25.5, .6, '#2b2723', 0); circ(c, x,-11.5, .6, '#2b2723', 0); }
-    rect(c, -12,-40, 5, 12, '#3e3a36');
+    poly(c, [-20,-9, 21,-9, 17,-28, -16,-28], '#6c6660');
+    poly(c, [-16,-28, 17,-28, 16.6,-26.4, -15.6,-26.4], LIGHT, 0); poly(c, [-20,-9, 21,-9, 20.4,-11.6, -19.4,-11.6], SHADOW, 0); poly(c, [-20,-9, -16,-28, -12.6,-28, -16.4,-9], SHADOW, 0);
+    lines(c, [-3,-28, -4,-9, 9,-28, 10,-9], 'rgba(30,28,24,.5)', .6);
+    rivets(c, -14,-25.5, 16,-25.5, 2.5); rivets(c, -17,-11.5, 18,-11.5, 2.5);
+    rect(c, 1,-24.6, 5, 2.2, '#22201d', 0); rect(c, 11,-24.6, 3, 2.2, '#22201d', 0);
+    rect(c, -12,-40, 5, 12, '#3e3a36'); rect(c, -12.8,-41.4, 6.6, 2, '#2e2a26', .6); rect(c, -11.4,-39, 1.2, 10.4, 'rgba(255,255,255,.18)', 0);
     for (let k = 0; k < 3; k++){ const t = (o.ph*.4 + k/3) % 1; ell(c, -9.5 - t*6,-42 - t*12, 2 + t*4, 1.6 + t*3, `rgba(200,200,200,${.6 - t*.6})`, 0, 0); }
-    rect(c, -16,-20, 33, 3, o.col, .5);
-    line(c, 17,-22, 28 + (o.atk ? -2 : 0),-22, IRON, 3);
+    rect(c, -16,-20, 33, 3, o.col, .5); line(c, -15.6,-19.6, 16.6,-19.6, o.hi, .5);
+    line(c, 17,-22, 28 + (o.atk ? -2 : 0),-22, OUT, 4); line(c, 17,-22, 28 + (o.atk ? -2 : 0),-22, IRON, 3); rect(c, 15.6,-24.4, 3, 4.8, '#4a4642', .5);
   },
   moto(c, o){
     tyre(c, -10,-5, 5, o.ph*2); tyre(c, 11,-5, 5, o.ph*2);
-    line(c, -10,-5, 0,-12, '#2b2b2b', 1.6); line(c, 0,-12, 11,-5, '#2b2b2b', 1.6);
-    rrect(c, -6,-15, 13, 5, 2, OLIVE); line(c, 8,-14, 12,-20, '#2b2b2b', 1.2);
+    lines(c, [-10,-5, 0,-12, 0,-12, 11,-5, 8,-14, 11,-5], '#2b2b2b', 1.6);
+    c.beginPath(); c.arc(-10,-5, 6.4, -2.9, -.9); c.strokeStyle = OUT; c.lineWidth = 1.8; c.stroke(); c.strokeStyle = OLIVE; c.lineWidth = 1; c.stroke();
+    line(c, -6,-7.6, 4,-7.2, '#8a8e95', 1.1);
+    rrect(c, -6,-15, 13, 5, 2, OLIVE); rect(c, -5,-14.6, 11, 1, LIGHT, 0); line(c, -4,-12.6, 5,-12.6, o.col, 1.2);
+    line(c, 8,-14, 12,-20, '#2b2b2b', 1.2); line(c, 10.8,-20, 13.4,-19.6, '#2b2b2b', 1); circ(c, 12.6,-16.6, 1.2, '#f6e9a8', .5);
     rider(c, {...o}, 0, -14, 'gun');
   },
   tank(c, o){
     tracks(c, -24, 48, 11, o.ph);
-    poly(c, [-22,-10, 23,-10, 19,-22, -20,-22], vgrad(c, -22, -10, '#76824a', '#4d5730'));
-    poly(c, [-10,-22, 8,-22, 6,-30, -8,-30], vgrad(c, -30, -22, '#7f8b50', '#56603a'));
-    line(c, 6,-26, 27 + (o.atk ? -3 : 0),-27, OUT, 3.6); line(c, 6,-26, 27 + (o.atk ? -3 : 0),-27, '#5a6438', 2.4);
+    poly(c, [-25,-10.6, 25,-10.6, 23,-12.6, -23,-12.6], '#55603a', .5);
+    poly(c, [-22,-10, 23,-10, 19,-22, -20,-22], '#66713f');
+    poly(c, [-20,-22, 19,-22, 18.6,-20.6, -19.6,-20.6], LIGHT, 0); poly(c, [-22,-10, 23,-10, 22.2,-12.2, -21.2,-12.2], SHADOW, 0);
+    lines(c, [-6,-22, -7,-10.6, 8,-22, 9,-10.6], 'rgba(30,34,16,.5)', .6); rivets(c, -18,-20, 17,-20, 3);
+    poly(c, [-10,-22, 8,-22, 6,-30, -8,-30], '#6f7a45');
+    poly(c, [-8,-30, 6,-30, 5.7,-28.8, -7.7,-28.8], LIGHT, 0); poly(c, [-10,-22, -8,-30, -6,-30, -7.6,-22], SHADOW, 0);
+    rrect(c, -4,-32, 6, 2.4, .8, '#59633a', .5);
+    line(c, 6,-26, 27 + (o.atk ? -3 : 0),-27, OUT, 3.6); line(c, 6,-26, 27 + (o.atk ? -3 : 0),-27, '#5a6438', 2.4); line(c, 7,-26.6, 26 + (o.atk ? -3 : 0),-27.5, 'rgba(255,255,255,.25)', .6);
+    rect(c, 4,-28.2, 3, 4.4, '#56603a', .5);
     circ(c, -10,-16, 3, '#f2ead8', .5); circ(c, -10,-16, 2, o.col, 0);
   },
   jeep(c, o){
     tyre(c, -12,-5.5, 5.5, o.ph*2); tyre(c, 12,-5.5, 5.5, o.ph*2);
-    poly(c, [-20,-9, 20,-9, 20,-17, 10,-17, 6,-21, -18,-21], vgrad(c, -21, -9, '#78804e', '#4f5634'));
-    line(c, 8,-17, 5,-25, '#2b2b2b', 1);
+    poly(c, [-20,-9, 20,-9, 20,-17, 10,-17, 6,-21, -18,-21], '#6a7244');
+    poly(c, [-18,-21, 6,-21, 5.4,-20, -17.8,-20], LIGHT, 0); rect(c, -19.6,-11, 39.2, 2, SHADOW, 0);
+    c.beginPath(); c.arc(-12,-9, 6.6, Math.PI, 0); c.arc(12,-9, 6.6, Math.PI, 0); c.strokeStyle = OUT; c.lineWidth = 1.3; c.stroke();
+    lines(c, [-2,-20.6, -2,-9.6, 10,-16.6, 10,-9.6], 'rgba(30,34,16,.5)', .6); rect(c, 17.4,-15.6, 2.6, 2, '#f6e9a8', .4); rect(c, -19.4,-15.6, 1.6, 2.4, '#b8261a', .3);
+    line(c, 8,-17, 5,-25, '#2b2b2b', 1); line(c, 5,-25, -1,-25, '#2b2b2b', .8);
     rect(c, -12,-24, 5, 4, o.col, .5);
-    line(c, -6,-21, -6,-28, '#2b2b2b', 1.2); line(c, -8,-29, 6 + (o.atk ? -1 : 0),-29.5, '#2b2b2b', 1.8);
-    circ(c, 1,-22, 2.8, SKIN); hatDraw(c, 'helmet', o);
+    c.save(); c.translate(1, 0); c.scale(.85, .85); face(c, {...o, w:null, atk:false}); hatDraw(c, 'helmet', o); c.restore();
+    line(c, -6,-21, -6,-28, '#2b2b2b', 1.2); rrect(c, -9,-30.4, 7, 2.6, .6, '#2e2f2b', .5); line(c, -2,-29.2, 6 + (o.atk ? -1 : 0),-29.5, '#2b2b2b', 1.4);
   },
   mbt(c, o){
     tracks(c, -28, 56, 11, o.ph);
-    poly(c, [-27,-10, 28,-10, 25,-19, -26,-19], vgrad(c, -19, -10, '#8a8a62', '#5c5c3e'));
-    poly(c, [-14,-19, 12,-19, 16,-23, 10,-28, -12,-28], vgrad(c, -28, -19, '#959569', '#606043'));
-    line(c, 12,-24, 40 + (o.atk ? -3 : 0),-24.5, OUT, 3.2); line(c, 12,-24, 40 + (o.atk ? -3 : 0),-24.5, '#6c6c4a', 2);
+    poly(c, [-29,-9.6, 29,-9.6, 29,-13, -29,-13], '#6f6f4e', .5); lines(c, [-14,-12.8, -14,-9.8, 0,-12.8, 0,-9.8, 14,-12.8, 14,-9.8], 'rgba(30,30,20,.5)', .5);
+    poly(c, [-27,-10, 28,-10, 25,-19, -26,-19], '#7d7d58');
+    poly(c, [-26,-19, 25,-19, 24.6,-17.8, -25.6,-17.8], LIGHT, 0);
+    poly(c, [-14,-19, 12,-19, 16,-23, 10,-28, -12,-28], '#878760');
+    poly(c, [-12,-28, 10,-28, 11,-27, -12,-27], LIGHT, 0); poly(c, [-14,-19, 12,-19, 13.2,-20.2, -14,-20.2], SHADOW, 0);
+    lines(c, [-4,-27.6, -4,-19.4, 4,-27.6, 4,-19.4], 'rgba(30,30,20,.45)', .5);
+    rrect(c, -8,-30.2, 5, 2.4, .8, '#6c6c4a', .5); line(c, -6,-30.2, -7,-34, '#2b2b2b', .5);
+    const bx = o.atk ? -3 : 0;
+    line(c, 12,-24, 40 + bx,-24.5, OUT, 3.2); line(c, 12,-24, 40 + bx,-24.5, '#6c6c4a', 2); rrect(c, 24 + bx,-25.9, 4, 2.8, .8, '#5c5c3e', .5);
     rect(c, -26,-17, 50, 2, o.col, .4);
   },
   hover(c, o){
     const bob = Math.sin(o.ph*1.5)*1.2;
     c.save(); c.translate(0, bob);
-    ell(c, 0,-3, 15, 2.4, o.hi + '88', 0, 0);
-    poly(c, [-17,-8, 14,-8, 21,-12, 10,-16, -14,-15], vgrad(c, -16, -8, '#f6f9fc', '#b7c0cc'));
-    line(c, -14,-11, 16,-11, o.col, 1.2);
+    ell(c, 0,-3, 15, 2.4, o.hi + '88', 0, 0); ell(c, 0,-3, 8, 1.2, '#ffffffaa', 0, 0);
+    poly(c, [-17,-8, 14,-8, 21,-12, 10,-16, -14,-15], '#e2e8ef');
+    poly(c, [-14,-15, 10,-16, 13,-14.6, -14.4,-13.6], LIGHT, 0); poly(c, [-17,-8, 14,-8, 16.4,-9.4, -16.6,-9.6], 'rgba(60,80,110,.25)', 0);
+    lines(c, [2,-15.6, 3,-8.2, -8,-14.8, -8.6,-8.2], 'rgba(60,80,110,.35)', .5);
+    line(c, -14,-11, 16,-11, o.col, 1.2); circ(c, -16.2,-10.6, 1.2, o.hi, .4);
     rider(c, o, -2, -15, 'laser');
     c.restore();
   },
   mech(c, o){
     const a = Math.sin(o.ph*.8)*5;
     for (const [s, k] of [[1, 0], [-1, 1]]){
-      const fx = s*a, kx = fx*.5 + 3;
-      limb(c, 0,-26, kx,-14, k ? '#9aa3ae' : '#c5ccd5', 3.4); limb(c, kx,-14, fx,-1.5, k ? '#9aa3ae' : '#c5ccd5', 3);
+      const fx = s*a, kx = fx*.5 + 3, col = k ? '#9aa3ae' : '#c5ccd5';
+      limb(c, 0,-26, kx,-14, col, 3.4); limb(c, kx,-14, fx,-1.5, col, 3);
+      circ(c, kx,-14, 1.7, k ? '#7d8691' : '#aab3be', .5); line(c, kx - 1.6,-19, kx - .8,-8, '#6f7782', .7);
       rect(c, fx - 3,-2.5, 7, 2.5, '#6f7782', .5);
     }
-    rrect(c, -10,-40, 20, 15, 3, vgrad(c, -40, -25, '#eef2f6', '#a9b2bd'));
-    rrect(c, 2,-37, 7, 5, 2, o.hi, .5);
+    rrect(c, -10,-40, 20, 15, 3, '#d9dfe6');
+    rect(c, -9,-39.4, 18, 1.4, LIGHT, 0); rect(c, -9.4,-28, 18.8, 2.4, 'rgba(60,80,110,.22)', 0);
+    lines(c, [-4,-39.6, -4,-31.6, -9.6,-34, -4,-34], 'rgba(60,80,110,.4)', .5); rivets(c, -8,-27, 8,-27, 2.4, 'rgba(60,80,110,.5)', .4);
+    rrect(c, 2,-37, 7, 5, 2, o.hi, .5); line(c, 3.4,-36, 7,-36, '#ffffff', .6);
     rect(c, -10,-31, 20, 2, o.col, .4);
-    rrect(c, 6,-30, 14 + (o.atk ? -2 : 0), 4, 1.5, '#8a939e');
+    rrect(c, 6,-30, 14 + (o.atk ? -2 : 0), 4, 1.5, '#8a939e'); line(c, 7,-29.2, 18 + (o.atk ? -2 : 0),-29.2, 'rgba(255,255,255,.35)', .6);
+    rrect(c, -12.6,-41, 4, 7, 1, '#aab3be', .5);
   }
 };
 /* ---- siege engines ---- */
 function crew(c, o, x, w){ c.save(); c.translate(x, 0); c.scale(.85, .85); person(c, {...o, w: w || null, atk:false}, false); c.restore(); }
+// a wooden beam with an outline and a lit edge
+function beam(c, x1, y1, x2, y2, col, w){ line(c, x1, y1, x2, y2, OUT, w + 1.1); line(c, x1, y1, x2, y2, col, w); }
 const SIEGE = {
   lever(c, o){
     crew(c, o, -22);
-    line(c, -8,0, 0,-20, WOOD, 2.2); line(c, 8,0, 0,-20, WOOD, 2.2);
+    beam(c, -8,0, 0,-20, WOOD, 2.2); beam(c, 8,0, 0,-20, WOOD, 2.2); line(c, -4.6,-8.6, 4.6,-8.6, WOOD2, 1.2);
     const ang = o.atk ? -1.1 : -2.6, ex = Math.cos(ang)*20, ey = -20 + Math.sin(ang)*20;
-    line(c, -Math.cos(ang)*6, -20 - Math.sin(ang)*6, ex, ey, WOOD2, 2);
-    if (!o.atk) circ(c, ex, ey - 1, 3.6, '#8f887c');
-    ell(c, -Math.cos(ang)*6, -20 - Math.sin(ang)*6 + 2, 3, 3, '#6d675d');
+    beam(c, -Math.cos(ang)*6, -20 - Math.sin(ang)*6, ex, ey, WOOD2, 2);
+    if (!o.atk){ circ(c, ex, ey - 1, 3.6, '#8f887c'); crescent(c, ex, ey - 1, 3.6, -.6, 1.6, SHADOW); }
+    ell(c, -Math.cos(ang)*6, -20 - Math.sin(ang)*6 + 2, 3, 3, '#6d675d'); circ(c, 0,-20, 1, IRON, .4);
   },
   catapult(c, o){
     crew(c, o, -24);
     wheel(c, -10,-5, 5, o.ph); wheel(c, 10,-5, 5, o.ph);
-    rect(c, -15,-13.5, 30, 5, WOOD);
-    line(c, -3,-12, 0,-24, WOOD2, 2.4); line(c, 3,-12, 0,-24, WOOD2, 2.4);
+    rect(c, -15,-13.5, 30, 5, WOOD); rect(c, -15,-13.5, 30, 1, LIGHT, 0); rivets(c, -13,-11, 14,-11, 3.4, '#c9ccd2', .35);
+    beam(c, -3,-12, 0,-24, WOOD2, 2.4); beam(c, 3,-12, 0,-24, WOOD2, 2.4);
     const ang = o.atk ? -1 : -2.5, ex = Math.cos(ang)*21, ey = -23 + Math.sin(ang)*21;
-    line(c, -Math.cos(ang)*5, -23 - Math.sin(ang)*5, ex, ey, WOOD, 2.2);
-    if (!o.atk) circ(c, ex, ey - 1, 3, '#bdb3a0');
+    beam(c, -Math.cos(ang)*5, -23 - Math.sin(ang)*5, ex, ey, WOOD, 2.2);
+    line(c, -2,-12.6, -Math.cos(ang)*4, -23 - Math.sin(ang)*4, '#d8c9a0', .6); circ(c, 0,-23.6, 1, IRON, .4);
+    if (!o.atk){ ell(c, ex, ey + .4, 2.6, 1.2, '#6b4424', 0, .5); circ(c, ex, ey - 1.4, 2.8, '#bdb3a0'); }
     line(c, -14,-13, -14,-34, OUT, 1); poly(c, [-14,-34, -4,-31, -14,-28], o.col, .5);
   },
   ballista(c, o){
     crew(c, o, -24);
     wheel(c, -9,-5, 5, o.ph); wheel(c, 9,-5, 5, o.ph);
-    line(c, 0,-10, 0,-16, WOOD2, 2.2);
-    line(c, -14,-17, 16,-17, WOOD, 2.6);
-    c.strokeStyle = WOOD2; c.lineWidth = 1.6; c.beginPath(); c.moveTo(12,-27); c.quadraticCurveTo(8,-17, 12,-7); c.stroke();
+    beam(c, 0,-10, 0,-16, WOOD2, 2.2);
+    beam(c, -14,-17, 16,-17, WOOD, 2.6); line(c, -13,-17.8, 15,-17.8, 'rgba(255,230,190,.35)', .6); rrect(c, 9.6,-19.4, 4.4, 4.8, 1, '#4a4d52', .5);
+    c.beginPath(); c.moveTo(12,-27); c.quadraticCurveTo(8,-17, 12,-7); c.strokeStyle = OUT; c.lineWidth = 2.6; c.stroke(); c.strokeStyle = WOOD2; c.lineWidth = 1.6; c.stroke();
     line(c, 12,-27, o.atk ? 10 : 0,-17, '#efe4c8', .6); line(c, 12,-7, o.atk ? 10 : 0,-17, '#efe4c8', .6);
-    if (!o.atk) line(c, 0,-17.4, 20,-17.4, IRON, 1);
+    if (!o.atk){ line(c, 0,-17.4, 18,-17.4, WOOD, 1); poly(c, [21,-17.4, 18,-18.6, 18,-16.2], STEEL, .35); }
     poly(c, [-14,-17, -14,-30, -6,-27], o.col, .5);
   },
   trebuchet(c, o){
     crew(c, o, -26);
-    rect(c, -16,-4, 32, 4, WOOD);
-    line(c, -12,-3, 0,-40, WOOD2, 2.6); line(c, 12,-3, 0,-40, WOOD2, 2.6);
+    rect(c, -16,-4, 32, 4, WOOD); rect(c, -16,-4, 32, 1, LIGHT, 0);
+    beam(c, -12,-3, 0,-40, WOOD2, 2.6); beam(c, 12,-3, 0,-40, WOOD2, 2.6); line(c, -7.4,-17, 7.4,-17, WOOD2, 1.6); line(c, -4.6,-26, 4.6,-26, WOOD2, 1.4);
     const ang = o.atk ? -1.0 : -2.7, L1 = 34, L2 = 9;
     const ex = Math.cos(ang)*L1, ey = -40 + Math.sin(ang)*L1, cx = -Math.cos(ang)*L2, cy = -40 - Math.sin(ang)*L2;
-    line(c, cx, cy, ex, ey, WOOD, 2.2);
-    rect(c, cx - 4, cy, 8, 8, '#6a5a48');
-    line(c, ex, ey, ex - 2, ey + 8, '#3b2a1d', .6); if (!o.atk) circ(c, ex - 2, ey + 9, 2.6, '#8f887c');
+    beam(c, cx, cy, ex, ey, WOOD, 2.2);
+    rect(c, cx - 4, cy, 8, 8, '#6a5a48'); lines(c, [cx - 4, cy + 2.6, cx + 4, cy + 2.6, cx - 4, cy + 5.3, cx + 4, cy + 5.3], IRON, .8); circ(c, 0,-40, 1.3, IRON, .5);
+    line(c, ex, ey, ex - 2, ey + 8, '#3b2a1d', .6); if (!o.atk){ circ(c, ex - 2, ey + 9, 2.6, '#8f887c'); crescent(c, ex - 2, ey + 9, 2.6, -.6, 1.2, SHADOW); }
     line(c, 0,-40, 0,-50, OUT, .8); poly(c, [0,-50, 9,-47, 0,-44], o.col, .4);
   },
   cannon(c, o){
-    const s = o.size || 1;
+    const s = o.size || 1, bronze = o.age <= 4;
     crew(c, o, -22);
     c.save(); c.scale(s, s);
-    line(c, -16,-3, 0,-9, WOOD, 3);
+    beam(c, -16,-3, 0,-9, WOOD, 3);
     const rec = o.atk ? -2 : 0;
     c.save(); c.translate(rec, 0); c.rotate(-.12);
-    rrect(c, -6,-13, 22, 6, 2.6, vgrad(c, -13, -7, o.age <= 4 ? '#c99a52' : '#5d6168', o.age <= 4 ? '#7d5a26' : '#2e3135'));
-    rect(c, 14,-13.5, 2.6, 7, o.age <= 4 ? '#8d6a30' : '#3a3d42', .5);
+    rrect(c, -6,-13, 22, 6, 2.6, bronze ? '#b0843f' : '#4a4e55');
+    rect(c, -4,-12.4, 18, 1.2, LIGHT, 0); rect(c, -4,-9, 18, 1.4, SHADOW, 0);
+    lines(c, [2,-13, 2,-7, 9,-13, 9,-7], bronze ? '#7d5a26' : '#2e3135', .9);
+    rect(c, 14,-13.5, 2.6, 7, bronze ? '#8d6a30' : '#3a3d42', .5); circ(c, -6.6,-10, 1.4, bronze ? '#8d6a30' : '#3a3d42', .5);
     c.restore();
     wheel(c, 0,-6.5, 6.5, o.ph, WOOD, 6);
     c.restore();
   },
   fieldgun(c, o){
     crew(c, o, -22);
-    line(c, -16,-3, 0,-9, '#4f5254', 3);
-    c.save(); c.translate(o.atk ? -2 : 0, 0); rrect(c, -4,-14, 26, 4, 1.6, '#4c5052'); c.restore();
-    poly(c, [2,-24, 8,-24, 8,-8, 2,-8], '#5f6467', .6);
+    beam(c, -16,-3, 0,-9, '#4f5254', 3);
+    c.save(); c.translate(o.atk ? -2 : 0, 0); rrect(c, -4,-14, 26, 4, 1.6, '#4c5052'); rect(c, -3,-13.6, 24, .9, LIGHT, 0); rect(c, 20,-14.6, 2.6, 5.2, '#3a3d42', .5); rrect(c, -4,-15, 8, 6, 1, '#55595c', .5); c.restore();
+    poly(c, [2,-24, 8,-24, 8,-8, 2,-8], '#5f6467', .6); rect(c, 2.4,-23.6, 1, 15.2, LIGHT, 0); rivets(c, 6.8,-22.4, 6.8,-9, 2.6, 'rgba(20,20,20,.55)', .35);
     wheel(c, 1,-6.5, 6.5, o.ph, '#6d5c44', 8);
     rect(c, 2.5,-22, 5, 2, o.col, .3);
   },
   howitzer(c, o){
     crew(c, o, -24);
-    line(c, -20,-2, 0,-10, '#4b5130', 3); line(c, -14,-1, 0,-10, '#4b5130', 3);
+    beam(c, -20,-2, 0,-10, '#4b5130', 3); beam(c, -14,-1, 0,-10, '#4b5130', 3); rect(c, -21.6,-3.2, 3, 3.2, '#3a3f24', .5);
     c.save(); c.translate(0,-13); c.rotate(-.55); c.translate(o.atk ? -3 : 0, 0);
-    rrect(c, -6,-3, 32, 6, 2, vgrad(c, -3, 3, '#7a8450', '#4b5130')); rect(c, 24,-3.6, 3, 7.2, '#3a3f24', .5);
+    rrect(c, -6,-3, 32, 6, 2, '#646e40'); rect(c, -4,-2.4, 28, 1.2, LIGHT, 0); rect(c, -4,1, 28, 1.4, SHADOW, 0);
+    rrect(c, -7,-4, 11, 8, 1.4, '#59633a', .6); rect(c, 24,-3.6, 3, 7.2, '#3a3f24', .5);
     c.restore();
     tyre(c, 0,-6, 6, o.ph);
-    circ(c, 0,-14, 3, '#5a6238', .5);
+    circ(c, 0,-14, 3, '#5a6238', .5); circ(c, 0,-14, 1.1, '#3a3f24', 0);
   },
   rockets(c, o){
     tyre(c, -14,-5.5, 5.5, o.ph*2); tyre(c, 2,-5.5, 5.5, o.ph*2); tyre(c, 15,-5.5, 5.5, o.ph*2);
-    rect(c, -22,-14, 44, 6, '#4d5432');
-    rrect(c, 12,-24, 12, 10, 2, vgrad(c, -24, -14, '#7a8250', '#4f5634'));
-    rect(c, 16,-22, 6, 4, '#a9d3ec', .4);
+    rect(c, -22,-14, 44, 6, '#4d5432'); rect(c, -22,-9.6, 44, 1.6, SHADOW, 0);
+    rrect(c, 12,-24, 12, 10, 2, '#687045'); rect(c, 13,-23.4, 10, 1.2, LIGHT, 0);
+    rect(c, 16,-22, 6, 4, '#a9d3ec', .4); line(c, 17,-21.4, 19,-21.4, '#ffffff', .6); rect(c, 22.6,-17, 1.8, 1.6, '#f6e9a8', .3);
     c.save(); c.translate(-8,-15); c.rotate(-.42);
-    rrect(c, -10,-8, 24, 9, 1, '#5d6640');
-    for (let k = 0; k < 3; k++) circ(c, 14,-6 + k*3, 1.1, '#262626', .3);
+    rrect(c, -10,-8, 24, 9, 1, '#5d6640'); rect(c, -9.4,-7.4, 22.8, 1.2, LIGHT, 0); lines(c, [-10,-5, 14,-5, -10,-2, 14,-2], 'rgba(30,34,16,.5)', .5);
+    c.beginPath(); for (let k = 0; k < 3; k++){ c.moveTo(15.1, -6 + k*3); c.arc(14,-6 + k*3, 1.1, 0, Math.PI*2); } fs(c, '#262626', .3);
     c.restore();
+    line(c, -12,-14, -4,-17, '#3a3f24', 1.4);
     rect(c, -21,-12, 30, 1.6, o.col, .3);
   },
   ion(c, o){
     crew(c, o, -24, 'laser');
     const bob = Math.sin(o.ph)*1;
-    ell(c, 0,-3, 14, 2.4, o.hi + '88', 0, 0);
-    poly(c, [-14,-8 + bob, 14,-8 + bob, 10,-16 + bob, -10,-16 + bob], vgrad(c, -16, -8, '#f2f5f9', '#aab3bf'));
-    line(c, 0,-16 + bob, 4,-26 + bob, '#c9d1db', 3);
+    ell(c, 0,-3, 14, 2.4, o.hi + '88', 0, 0); ell(c, 0,-3, 7, 1.1, '#ffffffaa', 0, 0);
+    poly(c, [-14,-8 + bob, 14,-8 + bob, 10,-16 + bob, -10,-16 + bob], '#e2e8ef'); poly(c, [-10,-16 + bob, 10,-16 + bob, 10.6,-14.8 + bob, -10.6,-14.8 + bob], LIGHT, 0);
+    poly(c, [-14,-8 + bob, 14,-8 + bob, 13.2,-9.6 + bob, -13.2,-9.6 + bob], 'rgba(60,80,110,.25)', 0);
+    line(c, 0,-16 + bob, 4,-26 + bob, OUT, 4); line(c, 0,-16 + bob, 4,-26 + bob, '#c9d1db', 3); circ(c, 0,-16 + bob, 2, '#aab3be', .5);
     c.beginPath(); c.arc(6,-28 + bob, 6, -Math.PI*.75, Math.PI*.25); c.closePath(); fs(c, '#e6ebf1', .6);
-    circ(c, 7,-28.6 + bob, 2.4, o.hi, 0);
+    c.beginPath(); c.arc(6,-28 + bob, 4.6, -Math.PI*.7, Math.PI*.2); c.strokeStyle = 'rgba(60,80,110,.3)'; c.lineWidth = .6; c.stroke();
+    circ(c, 7,-28.6 + bob, 3.4, o.hi + '55', 0); circ(c, 7,-28.6 + bob, 2.4, o.hi, 0); circ(c, 7.5,-29.1 + bob, .8, '#ffffff', 0);
     line(c, -12,-12 + bob, 12,-12 + bob, o.col, 1);
   }
 };
