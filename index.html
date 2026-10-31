@@ -102,7 +102,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upHead svg{width:14px;height:14px;stroke:var(--ink);stroke-width:2.4;fill:none;stroke-linecap:round}
 .upQ{font-size:12px;line-height:1.25;color:var(--muted);min-height:30px;text-align:left;letter-spacing:0}
 .upQ b{color:var(--ink)}
-.upGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+.upGrid{display:grid;grid-template-columns:repeat(3,auto);gap:8px;align-items:start}
 .upGroup{min-width:0;display:grid;gap:3px;align-content:start}
 .upLbl{font:900 12px/1.1 var(--display);color:var(--gold);letter-spacing:.06em;text-transform:uppercase;padding:0 2px;border-bottom:1px solid rgba(232,190,120,.25);white-space:nowrap}
 .upCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px}
@@ -115,10 +115,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upCard .desc{display:none}
 .upCard small{white-space:nowrap}
 /* the large view: wide cards that spell out what each upgrade does */
-.upBig .upPanel{width:min(680px,70vw)}
+.upBig .upPanel{width:min(780px,80vw)}
 .upBig.sharedUp .upPanel{width:auto}
 .upBig .upCards{grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:5px}
-@media (max-width:560px){ .upBig .upGrid{grid-template-columns:1fr} }
+@media (max-width:760px){ .upBig .upGrid{grid-template-columns:1fr} }
 .upBig .upCard{grid-template-columns:24px 1fr auto;grid-template-rows:auto auto auto;gap:1px 6px;padding:5px 7px}
 .upBig .upCard svg{grid-area:1/1/4/2;width:22px;height:22px;align-self:start}
 .upBig .upCard b{grid-area:1/2;font-size:14px}
@@ -127,28 +127,30 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .upBig .upCard .lv{grid-area:3/2/4/4;font-size:11.5px}
 .upBig .upQ{font-size:13px}
 .upCard:hover{border-color:var(--gold)}
-/* compact: one bar above the troop buttons with every upgrade in a row (two rows on narrower screens); slides sideways if it still doesn't fit */
-body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow:hidden;touch-action:auto;grid-template-columns:minmax(0,1fr)}
+/* compact: a bar above the troop buttons, troop upgrades beside (or above) fortress and economy upgrades */
+body:not(.upBig) .upPanel{width:auto;padding:4px 6px;gap:3px;overflow-x:hidden;overflow-y:auto;touch-action:auto;grid-template-columns:minmax(0,1fr)}
 body:not(.upBig) .upHead{flex-wrap:nowrap}
 body:not(.upBig) .upHead > span{font-size:13px}
 body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-body:not(.upBig) .upGrid{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin}
-body:not(.upBig) .upGroup{flex:1 1 0}
-body:not(.upBig) .upCards{grid-template-columns:repeat(var(--h),minmax(64px,1fr));gap:3px}
+/* the groups sit side by side when there's room, each as wide as its share of the cards, and wrap onto a second line when there isn't */
+body:not(.upBig) .upGrid{display:flex;flex-wrap:wrap;gap:5px 12px}
+body:not(.upBig) .upGroup{flex:var(--h) 1 calc(var(--h)*78px);min-width:0}
+body:not(.upBig) .upCards{grid-template-columns:repeat(var(--h),minmax(0,1fr));gap:3px}
 /* wide screens: each card is one line of icon, name and price, with the level underneath */
 @media (min-width:1260px){
-  body:not(.upBig) .upCards{grid-template-columns:repeat(var(--h),minmax(120px,1fr))}
   body:not(.upBig) .upCard{grid-template-columns:20px 1fr auto;grid-template-rows:auto auto;gap:0 6px;padding:4px 7px}
   body:not(.upBig) .upCard svg{grid-area:1/1/3/2}
-  body:not(.upBig) .upCard b{grid-area:1/2;font-size:13.5px}
-  body:not(.upBig) .upCard small{grid-area:1/3;font-size:13px}
-  body:not(.upBig) .upCard .lv{grid-area:2/2/3/4;font-size:12px}
+  body:not(.upBig) .upCard b{grid-area:1/2/2/4;font-size:13.5px}
+  body:not(.upBig) .upCard small{grid-area:2/3;font-size:12.5px}
+  body:not(.upBig) .upCard .lv{grid-area:2/2;font-size:12px}
   body:not(.upBig) .upLbl{font-size:13px}
 }
-body:not(.upBig) .upCard{touch-action:pan-x}
+body:not(.upBig) .upCard{touch-action:pan-y}
 /* phones held sideways: a single row that slides, to keep the bar as short as possible */
 @media (max-height:500px){
+  body:not(.upBig) .upGrid{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin}
   body:not(.upBig) .upGroup{flex:0 0 auto}
+  body:not(.upBig) .upCard{touch-action:pan-x}
   body:not(.upBig) .upCards{grid-template-columns:repeat(var(--n),64px)}
   body:not(.upBig) .upCard{padding:2px 4px;grid-template-rows:15px auto auto}
   body:not(.upBig) .upCard svg{width:14px;height:14px}
@@ -519,9 +521,12 @@ const UPG = {
   shields:    {label:'Energy Shields', base:300, t0:14, age:9, max0:6, per:0,   cap:6,  desc:'Troops take 7% less damage per level'}
 };
 const UPG_KEYS = Object.keys(UPG);
-// the upgrades panel shows troop upgrades on the left and fortress and economy upgrades on the right
-const UPG_TROOPS = ['weapons','armor','drill','march','range','medics','formation','ballistics','mounts','engineering','shields'];
-const UPG_GROUPS = [['Troops', UPG_TROOPS], ['Fortress & Economy', UPG_KEYS.filter(k => !UPG_TROOPS.includes(k))]];
+// the upgrades panel: troop upgrades on the left, the economy (the shortest list) in the middle, the fortress on the right
+const UPG_GROUPS = [
+  ['Troops', ['weapons','armor','drill','march','range','medics','formation','ballistics','mounts','engineering','shields']],
+  ['Economy', ['trade','plunder','scholars','logistics']],
+  ['Fortress', ['walls','gate','towers','rapid','watch','garrison','pitch','barrage']]
+];
 const maxLvl = (k, age) => { const U = UPG[k]; return age < U.age ? 0 : Math.min(U.cap, U.max0 + Math.floor(U.per*(age - U.age))); };
 // each level takes longer to research than the last; Scholars speed every research up, so old upgrades you skipped catch up quickly
 const upTime = (k, lvl) => Math.min(60, UPG[k].t0 * Math.pow(1.1, lvl));
@@ -3232,8 +3237,13 @@ const FORTS = {
       c.strokeStyle = 'rgba(45,28,12,.32)'; c.lineWidth = .8; c.beginPath(); let cx = x + (R() - .5)*r*.6, cy = y - r*.35; c.moveTo(cx, cy); for (let j = 0; j < 3; j++){ cx += (R() - .5)*r*.3; cy += r*.18; c.lineTo(cx, cy); } c.stroke();
       for (let j = 0; j < 5; j++){ c.fillStyle = R() < .5 ? 'rgba(110,140,60,.35)' : 'rgba(255,245,220,.22)'; c.beginPath(); c.arc(x + (R() - .5)*r, y - R()*r*.6, .8 + R()*1.8, 0, Math.PI*2); c.fill(); }
     };
-    for (let k = 0; k < 12; k++) rock(w*.03 + R()*w*.88, roof + h*.08 + R()*(h - roof)*.5, w*(.09 + R()*.08), true);
-    for (let k = 0; k < 16; k++) rock(R()*w*.93, roof + h*.18 + Math.pow(R(), .7)*(h - roof - h*.16), w*(.08 + R()*.12), false);
+    // one solid rocky hill whose flat top carries the deck, built up from boulders bedded into it
+    const hill = () => { c.beginPath(); c.moveTo(-2, h); c.lineTo(-2, roof + h*.02); for (let x = 0; x <= w*.9; x += w*.09) c.lineTo(x, roof + h*.01 + R()*h*.02); c.quadraticCurveTo(w*.99, roof + h*.08, w, h); c.closePath(); };
+    hill(); c.fillStyle = vgrad(c, roof, h, '#a68a62', '#5e4a32'); c.fill(); c.strokeStyle = 'rgba(45,28,12,.6)'; c.lineWidth = 1.4; c.stroke();
+    c.save(); hill(); c.clip();
+    for (let x = w*.02; x < w*.95; x += w*.13) rock(x + R()*w*.04, roof + w*.07, w*(.075 + R()*.03), true);   // the top course, bearing the deck
+    for (let k = 0; k < 18; k++) rock(R()*w*.95, roof + h*.14 + Math.pow(R(), .8)*(h - roof - h*.1), w*(.08 + R()*.1), false);
+    c.restore();
     for (let k = 0; k < 14; k++){ c.fillStyle = k % 2 ? 'rgba(90,130,50,.6)' : 'rgba(130,170,70,.55)'; c.beginPath(); c.ellipse(w*.05 + R()*w*.82, roof + h*(.06 + R()*.06), w*(.02 + R()*.03), h*.012, 0, 0, Math.PI*2); c.fill(); }   // moss and grass on top
     for (let k = 0; k < 3; k++){   // ochre handprints in the team's colour
       const x = w*(.14 + k*.13), y = roof + h*(.22 + R()*.12), s = w*.016; c.fillStyle = team.base + 'aa';
@@ -3246,8 +3256,6 @@ const FORTS = {
     const fg = c.createRadialGradient(mx, h - 4, 2, mx, h - 4, mw*1.1); fg.addColorStop(0, 'rgba(255,150,50,.75)'); fg.addColorStop(1, 'rgba(255,90,20,0)'); c.fillStyle = fg; c.fillRect(mx - mw, h - mh, mw*2, mh);
     for (let k = -1; k <= 1; k++){ c.fillStyle = '#ff9a2e'; c.beginPath(); c.moveTo(mx + k*6 - 5, h); c.quadraticCurveTo(mx + k*6 - 4, h - 10, mx + k*6, h - 15 - (k === 0 ? 5 : 0)); c.quadraticCurveTo(mx + k*6 + 4, h - 8, mx + k*6 + 5, h); c.fill(); }
     c.fillStyle = '#ffe28a'; c.beginPath(); c.ellipse(mx, h - 4, 4, 6, 0, 0, Math.PI*2); c.fill();
-    c.fillStyle = '#7a5530'; c.beginPath(); c.moveTo(mx - mw, h - mh*.2); c.quadraticCurveTo(mx - mw*.7, h - mh, mx - mw*.15, h - mh*.98); c.lineTo(mx - mw*.3, h - mh*.3); c.quadraticCurveTo(mx - mw*.45, h - mh*.05, mx - mw*.55, h); c.lineTo(mx - mw, h); c.fill();   // a hide hung across half the mouth
-    c.strokeStyle = 'rgba(40,24,10,.5)'; c.setLineDash([2, 2]); c.lineWidth = .8; c.beginPath(); c.moveTo(mx - mw*.2, h - mh*.9); c.lineTo(mx - mw*.42, h - mh*.15); c.stroke(); c.setLineDash([]);
     c.restore();
     c.fillStyle = '#efe6d2'; c.beginPath(); c.ellipse(mx + mw*1.15, h - 4, 4, 3.4, 0, 0, Math.PI*2); c.fill(); c.fillStyle = '#2a1a0c'; c.fillRect(mx + mw*1.15 - 2.2, h - 5, 1.6, 1.6); c.fillRect(mx + mw*1.15 + .6, h - 5, 1.6, 1.6);   // a skull by the entrance
     // the log deck the defenders stand on, and the palisade behind them
@@ -4063,7 +4071,7 @@ function seatHTML(s, i){
   const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name} (${CLASS[r]}): ${roleHint(age, r)}" aria-label="Train ${st.name}, ${st.cost} gold"><i class="cls">${CLASS[r]}</i><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><div class="upQ"></div><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
-    <div class="upGrid">${UPG_GROUPS.map(([name, keys]) => `<div class="upGroup"><div class="upLbl">${name}</div><div class="upCards" style="--n:${keys.length};--h:${Math.ceil(keys.length/2)}">${keys.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`).join('')}</div></div>`;
+    <div class="upGrid">${UPG_GROUPS.map(([name, keys]) => `<div class="upGroup" style="--n:${keys.length};--h:${Math.ceil(keys.length/2)}"><div class="upLbl">${name}</div><div class="upCards">${keys.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span><span class="qtxt rtxt" data-k="rtxt" hidden></span><span class="qbar rbar" data-k="rwrap" hidden><i data-k="rbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>

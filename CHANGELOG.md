@@ -24,7 +24,7 @@ All the updates to Ages at War, newest first.
 - Wall defenders take turns evenly and rest when there's nothing to shoot.
 
 ### Upgrades and controls
-- The upgrades bar is split into labeled groups: Troops on the left, Fortress & Economy on the right.
+- The upgrades bar is split into three labeled groups: Troops on the left, Economy in the middle and Fortress on the right. On narrower screens the groups wrap onto a second line instead of sliding off the edge.
 - Upgrade text is larger and easier to read; on wide screens each card shows icon, name and price on one line.
 - A new gold research bar sits beside the training bar, so you can follow both at once.
 - Upgrade prices depend on the upgrade's level, not your age.
@@ -36,6 +36,7 @@ All the updates to Ages at War, newest first.
 - More realistic effects: layered gunfire, ringing steel, plucked bows, real explosions and engines.
 
 ### Graphics
+- The Stone Age cave is one solid rocky hill with the log deck resting on top.
 - World War and Modern troops wear trousers up to the belt, and Future troops have an armoured waist with a ball joint at the hips, so no torso floats above its legs.
 - All six fortresses redrawn: sunlit masonry with mortar, chips and moss, proper gates (stone arches, studded doors, a portcullis, a riveted blast door), torches and lit windows, plus period details: a palisade and cave fire, a painted frieze and stepped battlements, a cone-roofed keep with ivy, a brick bastion with cannon and a sentry box, a bunker with camo netting and barbed wire, and a glowing future citadel.
 - Better troop art: faces, hands, a proper stride, shading, and more detailed mounts and machines.
