@@ -1933,7 +1933,7 @@ const RALLY_NAME = ['Attack','Zone 1','Zone 2','Zone 3'];
 function setOrder(s, i, kind){
   const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
   if (kind === 'rally'){ sd.rally = (sd.rally + 1) % (ZONES + 1); if (!isAI(sd)) say(`${tag(s)}${sd.rally ? `Troops hold zone ${sd.rally}` : 'Troops attack'}`, s, i); }
-  else { sd.healPref = HEAL_PREFS[(HEAL_PREFS.indexOf(sd.healPref) + 1) % HEAL_PREFS.length]; if (!isAI(sd)) say(`${tag(s)}Healers look after ${sd.healPref === 'any' ? 'the most hurt' : STATS[sd.age][sd.healPref].name}`, s, i); }
+  else { sd.healPref = HEAL_PREFS[(HEAL_PREFS.indexOf(sd.healPref) + 1) % HEAL_PREFS.length]; if (!isAI(sd)) say(`${tag(s)}${sd.healPref === 'any' ? 'Healers back to default: the most hurt nearby' : `Healers stay with ${STATS[sd.age][sd.healPref].name}`}`, s, i); }
   sfx('click'); return true;
 }
 // where a troop should stand when its commander has ordered it to hold a zone (ranged and siege a little behind, shields a little ahead)
@@ -2174,11 +2174,12 @@ function update(dt){
         if (best){ u.atk = st.rate; u.lunge = .25; best.healedAt = S.t; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
       }
       const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 40);
-      // follow the front of the army (or the front of the chosen troop type, if any are within 400), staying a little behind it
+      // follow the front of the army (or the front of the chosen troop type, wherever it is), staying a little behind it
       let lead = null, plead = null;
-      for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer && !statOf(f).guard){
-        if (!lead || (f.x - lead.x)*d > 0) lead = f;
-        if (pref !== 'any' && f.role === pref && Math.abs(f.x - u.x) < 400 && (!plead || (f.x - plead.x)*d > 0)) plead = f;
+      // (shields rush ahead, so they only lead when they're the chosen type)
+      for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer){
+        if (!statOf(f).guard && (!lead || (f.x - lead.x)*d > 0)) lead = f;
+        if (pref !== 'any' && f.role === pref && (!plead || (f.x - plead.x)*d > 0)) plead = f;
       }
       const L0 = plead || lead, rx = rallyX(u, st);
       let goal = L0 ? L0.x - d*20 : front(u.side) + d*120;
@@ -3350,7 +3351,7 @@ function syncUI(){
       setVar(b.querySelector('.prog'), on ? sd.focus.t/10 : 0);
     }
     setTxt(ui.acts.rally.querySelector('small'), RALLY_NAME[sd.rally || 0]);
-    const hp = sd.healPref || 'any'; setTxt(ui.acts.heal.querySelector('small'), hp === 'any' ? 'Any' : ROLE_SHORT[hp]);
+    const hp = sd.healPref || 'any'; setTxt(ui.acts.heal.querySelector('small'), hp === 'any' ? 'Default' : ROLE_SHORT[hp]);
     const ab = ui.acts.age, last = age >= AGES.length - 1, need = last ? RANK_NEED(sd.rank || 0) : XP_NEED(age), aReady = sd.xp >= need;
     setTxt(ab.querySelector('small'), aReady ? (last ? 'Rank up' : 'Ready') : `${Math.floor(sd.xp)}/${need}`);
     setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
@@ -3511,7 +3512,7 @@ function buildGuide(){
     ['@armor', 'Civilizations', 'Pick one for each commander in setup. Each has a small strength paid for with a weakness.'],
     ['@flag', 'Zones and orders', 'Three zones across the field. Stand in one with only your troops for a moment to take it: each zone you hold adds 10% to your income. The flag button sends your troops to attack or to hold a zone.'],
     ['@scholars', 'Study and war chest', 'Once per age each: for 10 seconds, Study turns your gold income into experience, and War chest turns your experience into gold.'],
-    ['@medics', 'Healer orders', 'Pick a troop type and your healers stay with it and heal it first.'],
+    ['@medics', 'Healer orders', 'Pick a troop type and your healers stay with it and heal it first. Default goes back to healing whoever is most hurt nearby.'],
     ['@age', 'Advance age', 'Fill the experience bar, then enter the next age. After the Future, experience buys Veteran Ranks: each makes new troops 4% stronger.'],
     ['@repair', 'Emergency repair', 'Restores 35% of your fortress, once per battle.'],
     ['@towers', 'Fortresses', 'Every commander has one. The front fortress is attacked first; a side loses when its last one falls.']
