@@ -2649,8 +2649,8 @@ function update(dt){
         for (const e of S.units){ if (e.side === s || e.dead) continue; const d = Math.abs(e.x - gate); if (d < bd){ bd = d; best = e; } }
         const n = defenders(s, i);
         if (best){
-          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % Math.min(7, n); sd.defAt = S.t;   // only seven are drawn; they take turns evenly
-          fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK % 7), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
+          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % n; sd.defAt = S.t;   // they take turns evenly
+          fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK % n, n), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
         } else sd.defT = .2;
       }
     });
@@ -2784,7 +2784,8 @@ const FORT_ROOF = {cave:.6, palace:.64, castle:.6, star:.56, bunker:.56, citadel
 const fortH = () => fh*.7;
 // height of a wall defender's hands above the lane, so their shots leave from the soldier and not the wall
 function fortRoofH(s, i){ return (laneY(.5) - (FORT_BASE() - fortH()*FORT_ROOF[AGES[S.sides[s].seats[i].age].fort]))/fh + 20*scaleK(.4)*.85/fh; }
-const defX = (s, i, k) => s === 0 ? FORT*(i + .16 + .1*k) : L - FORT*(i + .16 + .1*k);
+// wall defenders stand a tenth of a fortress apart, closing up when the garrison grows past seven so they all fit on the wall
+const defX = (s, i, k, n = 7) => { const o = .16 + k*Math.min(.1, .6/Math.max(1, n - 1)); return s === 0 ? FORT*(i + o) : L - FORT*(i + o); };
 function layout(){
   const r = cv.getBoundingClientRect(); dpr = Math.min(OPT.gfx === 'low' ? 1 : 2, window.devicePixelRatio || 1);
   cw = Math.max(1, r.width); ch = Math.max(1, r.height);
@@ -3467,9 +3468,9 @@ function drawFort(s, i){
   }
   const team = PAL[s][i], several = side.seats.length > 1;
   if (sd.alive){
-    const n = Math.min(7, defenders(s, i)), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
+    const n = defenders(s, i), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
     for (let a = 0; a < n; a++){
-      ctx.save(); ctx.translate(X(defX(s, i, a)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
+      ctx.save(); ctx.translate(X(defX(s, i, a, n)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
       person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK === a && S.t - (sd.defAt ?? -9) < .3, ph:0, civ:sd.civ}, false);
       ctx.restore();
     }

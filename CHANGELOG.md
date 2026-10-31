@@ -11,6 +11,7 @@ All the updates to Ages at War, newest first.
 - The battlefield preview in battle setup looks the same on phones as on PC, instead of zoomed in.
 
 ### Troops and combat
+- Every wall defender now shows on the walls and takes a turn shooting (up to 10 with Garrison), instead of at most seven. They stand closer together once there are more than seven.
 - The computer sizes up the enemy army before attacking. Up against a bigger army (for example one gathered on a zone), it holds its troops on the zone nearest its walls and attacks together once it has caught up, instead of sending troops in one at a time. The Easy computer still charges in.
 - Troops ordered to hold a zone now fall back to it even mid-fight, striking at anything in reach as they go. Shields and medics obey too.
 - Catapults and other siege weapons lob their shots at where the target stood and land there, splashing everyone in the blast, instead of following a moving troop.
