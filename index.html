@@ -65,6 +65,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   touch-action:none;cursor:pointer;min-width:0;line-height:1}
 .btn img{width:auto;height:72%;max-width:100%;display:block;flex:1 1 auto;min-height:0;object-fit:contain}
 .btn svg{width:22px;height:22px;flex:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.btn .cls{position:absolute;top:2px;left:4px;font:700 9.5px/1 var(--body);font-style:normal;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;pointer-events:none;text-shadow:0 1px 1px #000}
 .btn small{font-size:13px;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .btn.unit{height:clamp(46px,15vh,78px)}
 .btn.act{height:clamp(36px,10vh,48px)}
@@ -407,11 +408,13 @@ const BONUS = {
   heavy:{inf:1.6, rng:1.3, support:1.5, pike:.6, shield:1.5},
   siege:{heavy:1.3, inf:.6, rng:.6, fast:.45, pike:.6, support:.6, siege:.8, shield:1.3}
 };
+// every troop belongs to a class that stays the same through the ages, whatever the troop is called
+const CLASS = {inf:'Fighter', shield:'Shield', pike:'Pike', rng:'Ranged', fast:'Cavalry', heavy:'Heavy', siege:'Siege', support:'Medic'};
 // what each troop does, and whom it beats and fears, named as they are in the given age
 const ROLE_DO = {inf:'All-round fighter', rng:'Attacks from range', fast:'Quick raider', heavy:'Very tough and tramples fighters', siege:'Long range and wrecks fortresses, but helpless up close',
   pike:'Holds the line against riders and heavies', support:'Heals nearby troops and never attacks', shield:'Never attacks; marches to the front and soaks up hits'};
 function roleHint(age, r){
-  const nm = x => STATS[age][x].name, B = (a, b) => (BONUS[a] && BONUS[a][b]) || 1;
+  const nm = x => `${STATS[age][x].name} (${CLASS[x]})`, B = (a, b) => (BONUS[a] && BONUS[a][b]) || 1;
   const beats = ROLES.filter(x => x !== r && B(r, x) >= 1.3).map(nm), fears = ROLES.filter(x => x !== r && B(x, r) >= 1.3).map(nm);
   return ROLE_DO[r] + '.' + (beats.length ? ` Beats ${beats.join(', ')}.` : '') + (fears.length ? ` Weak to ${fears.join(', ')}.` : '');
 }
@@ -1747,8 +1750,10 @@ function renderLineup(){
   [...$('#diffSeg').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.d === diff));
   [...$('#mapSeg').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mapPick));
   [...$('#speedSeg').children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.sp === speedPick));
-  let note = humans === 0 ? 'No players: sit back and watch the computers fight.' : `${humans} player${humans > 1 ? 's' : ''} on one phone, held sideways.`;
+  const online = flat.filter(k => k === 'online').length, here = humans - online;
+  let note = humans === 0 ? 'No players: sit back and watch the computers fight.' : online ? `${here} player${here === 1 ? '' : 's'} on this phone and ${online} joining online.` : `${humans} player${humans > 1 ? 's' : ''} on one phone, held sideways.`;
   if (lineup[0].includes('human') && lineup[1].includes('human')) note += ' Blue uses the controls on the left, Red on the right.';
+  if (NET.role === 'host' && Object.keys(NET.owners).length) note += ' Tap a joined player to move them to another spot.';
   if (lineup.some(side => side.filter(k => k === 'human').length === 2)) note += ' Teammates split their side, and each has their own gold, age, upgrades and fortress.';
   const n0 = lineup[0].length, n1 = lineup[1].length;
   if (n0 !== n1){ const big = n0 > n1 ? 0 : 1; note += ` Uneven fight: ${SIDE_NAME[big]} has ${Math.max(n0, n1)} commanders and earns about ${Math.round((Math.sqrt(Math.max(n0, n1)/Math.min(n0, n1)) - 1)*100)}% more gold.`; }
@@ -1756,19 +1761,45 @@ function renderLineup(){
   renderSwatches(); netLobby(); netShow();
   store.set('lineup', lineup); store.set('diff', diff); store.set('map', mapPick); store.set('civs', civs); store.set('speed', speedPick);
 }
+// online lobby: every commander slot is {k, owner}; working on that list keeps joined players attached to their slot as it moves
+const slotList = () => lineup.map((side, s) => side.map((k, i) => ({k, owner: NET.owners[`${s}-${i}`] || null})));
+function setSlots(list){ NET.owners = {}; lineup = list.map((side, s) => side.map((o, i) => { if (o.owner) NET.owners[`${s}-${i}`] = o.owner; return o.k; })); }
+// tapping a joined player moves them to the next spot: swapping with whoever is there, or taking a free place on the other side
+function moveJoined(s, i){
+  const list = slotList(), me = list[s][i], spots = [];
+  for (let t = 0; t < 2; t++) for (let j = 0; j < 3; j++) if (j < list[t].length || (j === list[t].length && t !== s)) spots.push([t, j]);
+  const at = spots.findIndex(([t, j]) => t === s && j === i);
+  for (let n = 1; n < spots.length; n++){
+    const [t, j] = spots[(at + n) % spots.length];
+    if (j < list[t].length){ list[s][i] = list[t][j]; list[t][j] = me; setSlots(list); return; }
+    if (list[s].length > 1){ list[s].splice(i, 1); list[t].push(me); setSlots(list); return; }   // never leave a side empty
+  }
+}
+// a preset picked while hosting keeps everyone who joined: the first player is this phone, the other player slots go to joined players, then any still waiting
+function applyPreset(lu){
+  if (NET.role !== 'host'){ lineup = lu; return; }
+  const ids = Object.values(NET.owners); let host = false;
+  const list = lu.map(side => side.map(k => {
+    if (k !== 'human') return {k, owner:null};
+    if (!host){ host = true; return {k, owner:null}; }
+    return {k:'online', owner: ids.shift() || null};
+  }));
+  setSlots(list);
+  for (const id of ids) claimSlot(id);
+}
 $('#menu').addEventListener('click', e => {
   const slot = e.target.closest('.slot'), chip = e.target.closest('[data-p]'), d = e.target.closest('[data-d]'), m = e.target.closest('[data-m]'), sp = e.target.closest('[data-sp]');
   if (slot && !slot.disabled){
     const [, s, i] = slot.id.split('-').map(Number), side = lineup[s], cur = side[i] || 'none';
     const humansElsewhere = side.filter((k, j) => j !== i && k === 'human').length;
-    if (cur === 'online' && NET.owners[`${s}-${i}`]) return;   // a joined player keeps their slot
+    if (cur === 'online' && NET.owners[`${s}-${i}`]){ moveJoined(s, i); audioInit(); renderLineup(); return; }   // the host moves a joined player along
     let cycle = i === 0 ? ['human','cpu'] : ['none','human','cpu'];
     if (NET.role === 'host') cycle.push('online');
     if (humansElsewhere >= 2) cycle = cycle.filter(k => k !== 'human');
     const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
     if (next === 'none') side.length = i; else side[i] = next;
   }
-  if (chip) lineup = JSON.parse(JSON.stringify(PRESETS[+chip.dataset.p][1]));
+  if (chip) applyPreset(JSON.parse(JSON.stringify(PRESETS[+chip.dataset.p][1])));
   if (d) diff = d.dataset.d;
   if (m) mapPick = m.dataset.m;
   if (sp) speedPick = +sp.dataset.sp;
@@ -1807,7 +1838,8 @@ const sideUp = (s, k) => Math.max(...S.sides[s].seats.map(sd => sd.up[k]));
 const defenders = (s, i) => 2 + S.sides[s].seats[i].def;
 const live = () => S && S.over < 0 && !paused;
 const can = sd => !!sd && sd.alive && live();
-const upCost = (sd, k, lvl) => round5(UPG[k].base * (1 + .35*lvl) * PRICE(sd.age));
+// an upgrade's price comes from its level; each age only adds 8%, so an untouched upgrade stays cheap late in the game
+const upCost = (sd, k, lvl) => round5(UPG[k].base * Math.pow(1.17, lvl) * Math.pow(1.08, sd.age));
 const qCap = sd => 5 + sd.up.logistics;
 const trainTime = (sd, it) => STATS[it.a][it.r].train / ((1 + .06*sd.up.drill) * CV(sd, 'train'));
 const resSpeed = sd => (1 + .12*sd.up.scholars) * CV(sd, 'res');
@@ -1927,13 +1959,13 @@ function swapFocus(s, i, k){
   sfx('upgrade'); if (!isAI(sd)) say(`${tag(s)}${k === 'xp' ? 'Study: gold becomes experience for 10 seconds' : 'War chest: experience becomes gold for 10 seconds'}`, s, i);
   return true;
 }
-const ROLE_SHORT = {inf:'Fighters', pike:'Pikes', rng:'Ranged', fast:'Riders', heavy:'Heavies', siege:'Siege', shield:'Shields'};
-const HEAL_PREFS = ['any','inf','pike','rng','fast','heavy','siege','shield'];
+const ROLE_SHORT = {front:'Front', back:'Back', inf:'Fighters', pike:'Pikes', rng:'Ranged', fast:'Cavalry', heavy:'Heavies', siege:'Siege', shield:'Shields'};
+const HEAL_PREFS = ['any','front','back','inf','pike','rng','fast','heavy','siege','shield'];
 const RALLY_NAME = ['Attack','Zone 1','Zone 2','Zone 3'];
 function setOrder(s, i, kind){
   const sd = S.sides[s].seats[i]; if (!can(sd)) return false;
   if (kind === 'rally'){ sd.rally = (sd.rally + 1) % (ZONES + 1); if (!isAI(sd)) say(`${tag(s)}${sd.rally ? `Troops hold zone ${sd.rally}` : 'Troops attack'}`, s, i); }
-  else { sd.healPref = HEAL_PREFS[(HEAL_PREFS.indexOf(sd.healPref) + 1) % HEAL_PREFS.length]; if (!isAI(sd)) say(`${tag(s)}${sd.healPref === 'any' ? 'Healers back to default: the most hurt nearby' : `Healers stay with ${STATS[sd.age][sd.healPref].name}`}`, s, i); }
+  else { sd.healPref = HEAL_PREFS[(HEAL_PREFS.indexOf(sd.healPref) + 1) % HEAL_PREFS.length]; const hp = sd.healPref; if (!isAI(sd)) say(`${tag(s)}${hp === 'any' ? 'Medics back to default: the most hurt nearby' : hp === 'front' ? 'Medics stay with the front line' : hp === 'back' ? 'Medics stay with the back line' : `Medics stay with ${STATS[sd.age][hp].name}`}`, s, i); }
   sfx('click'); return true;
 }
 // where a troop should stand when its commander has ordered it to hold a zone (ranged and siege a little behind, shields a little ahead)
@@ -2150,7 +2182,7 @@ function update(dt){
         for (const e of S.units){ if (e.side === s || e.dead) continue; const d = Math.abs(e.x - gate); if (d < bd){ bd = d; best = e; } }
         const n = defenders(s, i);
         if (best){
-          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % n;
+          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % Math.min(7, n); sd.defAt = S.t;   // only seven are drawn; they take turns evenly
           fire(s, STATS[sd.age].rng.proj, defX(s, i, sd.defK % 7), .5, fortRoofH(s, i), 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
         } else sd.defT = .2;
       }
@@ -2168,18 +2200,19 @@ function update(dt){
       if (u.atk <= 0){
         let best = null, bf = 1, bp = 1;
         // heal reach is short, and each troop takes healing at most every 0.6 seconds, so piling healers behind one tank stops paying off;
-        // a chosen troop type comes first, then whoever is most hurt
+        // by default the most hurt comes first; front or back picks the hurt troop furthest forward or furthest back; a troop type comes first, then the most hurt
         for (const f of S.units) if (f.side === u.side && !f.dead && f !== u && Math.abs(f.x - u.x) < 70 && S.t - (f.healedAt || -9) >= (st.healGap || 1) && f.hp < f.max){
-          const fr = f.hp/f.max - (pref !== 'any' && f.role === pref ? 1 : 0); if (fr < bf){ bf = fr; best = f; } }
+          const fr = pref === 'front' ? -f.x*d : pref === 'back' ? f.x*d : f.hp/f.max - (f.role === pref ? 1 : 0); if (fr < bf){ bf = fr; best = f; } }
         if (best){ u.atk = st.rate; u.lunge = .25; best.healedAt = S.t; best.hp = Math.min(best.max, best.hp + st.healer*POW(u.age)*(u.dm || 1)); S.fx.push({k:'heal', x:best.x, z:best.z, t:0, dur:.8}); sfx('heal', best.x); }
       }
       const threat = S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < 40);
-      // follow the front of the army (or the front of the chosen troop type, wherever it is), staying a little behind it
+      // follow the front of the army, staying a little behind it; Front follows the very first troop (shields included),
+      // Back stays with the last one, and a troop type follows the front of that type, wherever it is
       let lead = null, plead = null;
-      // (shields rush ahead, so they only lead when they're the chosen type)
       for (const f of S.units) if (f.side === u.side && f !== u && !f.dead && !statOf(f).healer){
-        if (!statOf(f).guard && (!lead || (f.x - lead.x)*d > 0)) lead = f;
-        if (pref !== 'any' && f.role === pref && (!plead || (f.x - plead.x)*d > 0)) plead = f;
+        if (!statOf(f).guard && (!lead || (f.x - lead.x)*d > 0)) lead = f;   // shields rush ahead, so by default they don't lead
+        const fits = pref === 'front' || pref === 'back' || f.role === pref;
+        if (pref !== 'any' && fits && (!plead || (pref === 'back' ? (plead.x - f.x)*d > 0 : (f.x - plead.x)*d > 0))) plead = f;
       }
       const L0 = plead || lead, rx = rallyX(u, st);
       let goal = L0 ? L0.x - d*20 : front(u.side) + d*120;
@@ -2879,7 +2912,7 @@ function drawFort(s, i){
     const n = Math.min(7, defenders(s, i)), k = scaleK(.4)*.85, roofY = FORT_BASE() - f.h*FORT_ROOF[AGES[sd.age].fort];
     for (let a = 0; a < n; a++){
       ctx.save(); ctx.translate(X(defX(s, i, a)) + sh, roofY); ctx.scale(dirOf(s)*k, k);
-      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK % 7 === a && sd.defT > .5/defenders(s, i), ph:0, civ:sd.civ}, false);
+      person(ctx, {age:sd.age, col:team.base, hi:team.hi, w:STATS[sd.age].rng.d.w, atk: sd.defK === a && S.t - (sd.defAt ?? -9) < Math.min(.3, .6/defenders(s, i)), ph:0, civ:sd.civ}, false);
       ctx.restore();
     }
   }
@@ -3246,14 +3279,14 @@ const openPanels = new Set();
 function seatHTML(s, i){
   const c = PAL[s][i], side = S.sides[s], sd = side.seats[i], age = sd.age;
   if (!sd.alive) return `<div class="seat" style="--team:${c.base}"><div class="head"><b style="color:${c.hi}">${c.name}</b><span class="qtxt">Fortress fallen. Your troops fight on.</span></div></div>`;
-  const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name}: ${roleHint(age, r)}" aria-label="Train ${st.name}, ${st.cost} gold"><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
+  const u = r => { const st = STATS[age][r]; return `<button class="btn unit" data-s="${s}" data-i="${i}" data-r="${r}" title="${st.name} (${CLASS[r]}): ${roleHint(age, r)}" aria-label="Train ${st.name}, ${st.cost} gold"><i class="cls">${CLASS[r]}</i><img src="${unitIcon(age, r, c, sd.civ)}" alt=""><small>${st.cost}</small><em hidden></em></button>`; };
   const a = (k, label, inner) => `<button class="btn act" data-s="${s}" data-i="${i}" data-a="${k}" title="${label}" aria-label="${label}">${inner}<small></small><em hidden></em><i class="prog"></i></button>`;
   const panel = `<div class="upPanel" hidden><div class="upHead"><span>Upgrades</span><div class="upQ"></div><button data-close data-s="${s}" data-i="${i}" aria-label="Close upgrades"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <div class="upGrid" style="--n:${UPG_KEYS.length};--h:${Math.ceil(UPG_KEYS.length/2)}">${UPG_KEYS.map(k => `<button class="upCard" data-s="${s}" data-i="${i}" data-up="${k}" aria-label="${UPG[k].label}: ${UPG[k].desc}" title="${UPG[k].desc}">${svgi(k)}<small></small><b>${UPG[k].label}</b><span class="lv"></span><span class="desc">${UPG[k].desc}</span></button>`).join('')}</div></div>`;
   return `<div class="seat" style="--team:${c.base}">${panel}
     <div class="head"><span class="coins"></span><b data-k="gold">0</b><small data-k="inc"></small><span class="qtxt" data-k="qtxt"></span><span class="qbar"><i data-k="qbar"></i></span></div>
     <div class="units">${ROLE_UI.map(u).join('')}${a('cancel','Cancel last in line',svgi('cancel'))}</div>
-    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c, sd.civ)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('repair','Emergency repair, once per battle',svgi('repair'))}${a('study','Study: for 10 seconds all your gold income becomes experience. Once per age',svgi('scholars'))}${a('chest','War chest: for 10 seconds all your experience becomes gold. Once per age',svgi('trade'))}${a('rally','Orders: send troops to attack, or to hold zone 1, 2 or 3',svgi('flag'))}${a('heal','Healers: pick which troop type they look after first',svgi('medics'))}${a('age','Advance to the next age',svgi('age'))}</div>
+    <div class="extras">${a('def','Add a wall defender',`<img src="${defIcon(age, c, sd.civ)}" alt="">`)}${a('barrage',BARRAGE[age].name,svgi('barrage'))}${a('up','Upgrades',svgi('star'))}${a('repair','Emergency repair, once per battle',svgi('repair'))}${a('study','Study: for 10 seconds all your gold income becomes experience. Once per age',svgi('scholars'))}${a('chest','War chest: for 10 seconds all your experience becomes gold. Once per age',svgi('trade'))}${a('rally','Orders: send troops to attack, or to hold zone 1, 2 or 3',svgi('flag'))}${a('heal','Medics: default, front line, back line, or a troop type to look after first',svgi('medics'))}${a('age','Advance to the next age',svgi('age'))}</div>
   </div>`;
 }
 function buildTrays(){
@@ -3512,7 +3545,7 @@ function buildGuide(){
     ['@armor', 'Civilizations', 'Pick one for each commander in setup. Each has a small strength paid for with a weakness.'],
     ['@flag', 'Zones and orders', 'Three zones across the field. Stand in one with only your troops for a moment to take it: each zone you hold adds 10% to your income. The flag button sends your troops to attack or to hold a zone.'],
     ['@scholars', 'Study and war chest', 'Once per age each: for 10 seconds, Study turns your gold income into experience, and War chest turns your experience into gold.'],
-    ['@medics', 'Healer orders', 'Pick a troop type and your healers stay with it and heal it first. Default goes back to healing whoever is most hurt nearby.'],
+    ['@medics', 'Healer orders', 'Default heals whoever is most hurt nearby. Front keeps medics with the very first troops, shields included; Back keeps them with the rearmost. Or pick a troop type and they stay with it and heal it first.'],
     ['@age', 'Advance age', 'Fill the experience bar, then enter the next age. After the Future, experience buys Veteran Ranks: each makes new troops 4% stronger.'],
     ['@repair', 'Emergency repair', 'Restores 35% of your fortress, once per battle.'],
     ['@towers', 'Fortresses', 'Every commander has one. The front fortress is attacked first; a side loses when its last one falls.']
@@ -3638,7 +3671,7 @@ function hostSnap(){
   const fresh = list => { const out = []; for (const o of list) if (!o._sent){ o._sent = 1; const c = {...o}; delete c._sent; out.push(c); } return out; };
   sendAll({t:'snap', st:S.t, ot:!!S.overtime, over:S.over, shake:S.shake,
     sides:S.sides.map(side => side.seats.map(sd => ({kind:sd.kind, gold:sd.gold, q:sd.q, qt:sd.qt, def:sd.def, up:sd.up, res:sd.res, bar:sd.bar,
-      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, age:sd.age, xp:sd.xp, rank:sd.rank || 0, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
+      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, defAt:sd.defAt, age:sd.age, xp:sd.xp, rank:sd.rank || 0, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
     units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0, u.civ || 0, u.back ? 1 : 0]),
     shots:fresh(S.shots), fx:fresh(S.fx), msgs:fresh(S.msgs), snd:NET.sounds.splice(0)});
 }
