@@ -447,7 +447,7 @@ const AGES = [
   {name:'Stone Age',   gear:['hair','fur'],        fort:'cave',    units:[
     ['Clubman',{f:'p',w:'club'}], ['Rock Thrower',{f:'p',w:'rock'},'rock'], ['Wolf Rider',{f:'m',m:'wolf',w:'club'}], ['Mammoth',{f:'m',m:'mammoth',w:'spear'}], ['Boulder Sling',{f:'s',s:'lever'},'boulder']]},
   {name:'Bronze Age',  gear:['cloth','tunic'],     fort:'palace',  units:[
-    ['Spearman',{f:'p',w:'spear'}], ['Archer',{f:'p',w:'bow'},'arrow'], ['Camel Rider',{f:'m',m:'camel',w:'lance'}], ['War Elephant',{f:'m',m:'elephant',w:'bow'}], ['Catapult',{f:'s',s:'catapult'},'stone']]},
+    ['Spearman',{f:'p',w:'spear'}], ['Archer',{f:'p',w:'bow'},'arrow'], ['Camel Rider',{f:'m',m:'camel',w:'lance'}], ['War Elephant',{f:'m',m:'elephant',w:'spear'}], ['Catapult',{f:'s',s:'catapult'},'stone']]},
   {name:'Iron Age',    gear:['crest','armor'],     fort:'palace',  units:[
     ['Legionary',{f:'p',w:'sword'}], ['Javelineer',{f:'p',w:'javelin'},'javelin'], ['Horseman',{f:'m',m:'horse',w:'spear'}], ['Armored Elephant',{f:'m',m:'elephant',w:'spear',armor:1}], ['Ballista',{f:'s',s:'ballista'},'bolt']]},
   {name:'Medieval',    gear:['greathelm','mail'],  fort:'castle',  units:[
@@ -2423,7 +2423,7 @@ const rangeOf = u => { const st = statOf(u); return st.range * (st.proj ? (u.rng
 const MUZZLE_S = {lever:[9,-38], catapult:[11,-41], ballista:[20,-17], trebuchet:[17,-62], cannon:[15,-12], fieldgun:[22,-12], howitzer:[22,-27], rockets:[3.5,-24], ion:[7,-29]};
 const MUZZLE_W = {rock:[8,-24], bow:[12,-20], javelin:[9,-24], crossbow:[11,-19.5], gun:[15,-21.6], mg:[17,-19], launcher:[12,-25], laser:[13,-20]};
 function muzzle(u){
-  const d = statOf(u).d, m = d.f === 's' ? MUZZLE_S[d.s] : d.f === 'm' && d.m === 'elephant' && d.w === 'bow' ? [6.2, -48.7] : MUZZLE_W[d.w];   // the elephant's archer sits high on its back
+  const d = statOf(u).d, m = d.f === 's' ? MUZZLE_S[d.s] : MUZZLE_W[d.w];
   if (!m) return [0, u.role === 'siege' ? .08 : .1];
   const k = scaleK(u.z), sz = d.size || 1;
   return [dirOf(u.side)*m[0]*sz*k/ppw, -m[1]*sz*k/fh];   // sideways in world units, height as a share of the field
@@ -2676,10 +2676,6 @@ function update(dt){
       if (u.atk <= 0){
         u.atk = st.rate; u.lunge = .2;
         if (st.proj){ const [mx, mh] = muzzle(u); fire(u.side, st.proj, u.x + mx, u.z, mh, dmgOf(u), u.role, tgt, foe, st.splash || 0); const sh = S.shots[S.shots.length - 1]; sh.fm = u.fm || 1; sh.dm = u.dm || 1; }
-        else if (st.d.w === 'bow'){   // an archer riding into the fight (the war elephant): the blow is a real arrow loosed at close range
-          const [mx, mh] = muzzle(u); fire(u.side, 'arrow', u.x + mx, u.z, mh, dmgOf(u), u.role, tgt, foe, 0); const sh = S.shots[S.shots.length - 1]; sh.fm = u.fm || 1; sh.dm = u.dm || 1;
-          if (tgt && st.trample) for (const e of S.units) if (e !== tgt && e.side !== u.side && !e.dead && Math.abs(e.x - tgt.x) < st.trample) hurtUnit(e, dmgVs(dmgOf(u), u.role, e.role)*.5, 'unit');
-        }
         else {
           if (tgt){
             hurtUnit(tgt, dmgVs(dmgOf(u), u.role, tgt.role), 'unit');
