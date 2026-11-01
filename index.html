@@ -138,13 +138,16 @@ body:not(.upBig) .upHead .upQ{order:0;flex:1 1 auto;min-width:0;min-height:0;whi
 body:not(.upBig) .upGrid{display:flex;flex-wrap:wrap;gap:5px 12px}
 body:not(.upBig) .upGroup{flex:var(--h) 1 calc(var(--h)*78px);min-width:0}
 body:not(.upBig) .upCards{grid-template-columns:repeat(var(--h),minmax(0,1fr));gap:3px}
+/* players sharing one screen get narrow panels: cards wrap to a readable width and the panel scrolls instead */
+body.sharedUp:not(.upBig) .upCards{grid-template-columns:repeat(auto-fill,minmax(72px,1fr))}
+body.sharedUp:not(.upBig) .upGroup{flex:1 1 100%}
 /* wide screens: each card is one line of icon, name and price, with the level underneath */
 @media (min-width:1260px){
-  body:not(.upBig) .upCard{grid-template-columns:20px 1fr auto;grid-template-rows:auto auto;gap:0 6px;padding:4px 7px}
-  body:not(.upBig) .upCard svg{grid-area:1/1/3/2}
-  body:not(.upBig) .upCard b{grid-area:1/2/2/4;font-size:13.5px}
-  body:not(.upBig) .upCard small{grid-area:2/3;font-size:12.5px}
-  body:not(.upBig) .upCard .lv{grid-area:2/2;font-size:12px}
+  body:not(.upBig):not(.sharedUp) .upCard{grid-template-columns:20px 1fr auto;grid-template-rows:auto auto;gap:0 6px;padding:4px 7px}
+  body:not(.upBig):not(.sharedUp) .upCard svg{grid-area:1/1/3/2}
+  body:not(.upBig):not(.sharedUp) .upCard b{grid-area:1/2/2/4;font-size:13.5px}
+  body:not(.upBig):not(.sharedUp) .upCard small{grid-area:2/3;font-size:12.5px}
+  body:not(.upBig):not(.sharedUp) .upCard .lv{grid-area:2/2;font-size:12px}
   body:not(.upBig) .upLbl{font-size:13px}
 }
 body:not(.upBig) .upCard{touch-action:pan-y}
@@ -4390,14 +4393,14 @@ function buildGuide(){
     ['support', 'Healer', 'Heals the most hurt troops nearby and stays behind the front line.'],
     ['shield', 'Shield', 'Never attacks. Marches to the very front and soaks up hits for the troops behind. Arrows and bullets barely hurt it; heavies and siege break it.'],
     ['@barrage', 'Barrage', 'Free bombardment that recharges. Rocks in the Stone Age, orbital strikes in the Future.'],
-    ['@star', 'Upgrades', 'Twenty-three upgrades. Every age raises their level caps, and new ones unlock along the way. Each level takes longer to research; Scholars speed all research up.'],
+    ['@star', 'Upgrades', 'Twenty-three upgrades, grouped as Troops, Economy and Fortress. Every age raises their level caps, and new ones unlock along the way. Each level takes longer to research; Scholars speed all research up. In the Future age a maxed upgrade becomes a Boost: +1% health and damage for all your troops.'],
     ['@armor', 'Civilizations', 'Pick one for each commander in setup. Each has a small strength paid for with a weakness.'],
     ['@flag', 'Zones and orders', 'Three zones across the field. Stand in one with only your troops for a moment to take it: each zone you hold adds 10% to your income. The flag button sends your troops to attack or to hold a zone.'],
     ['@scholars', 'Study and war chest', 'Once per age each: for 10 seconds, Study turns your gold income into experience, and War chest turns your experience into gold.'],
     ['@medics', 'Healer orders', 'Default heals whoever is most hurt nearby. Front keeps medics with the very first troops, shields included; Back keeps them with the rearmost. Or pick a troop type and they stay with it and heal it first.'],
     ['@age', 'Advance age', 'Fill the experience bar, then enter the next age. After the Future, experience buys Veteran Ranks: each makes new troops 4% stronger.'],
     ['@repair', 'Emergency repair', 'Restores 35% of your fortress, once per battle.'],
-    ['@towers', 'Fortresses', 'Every commander has one. The front fortress is attacked first; a side loses when its last one falls.']
+    ['@towers', 'Fortresses', 'Every commander has one, with a single wall defender to start. Up to three defenders in the Stone Age, more from the Bronze Age. Walls mend slowly on their own. The front fortress is attacked first; a side loses when its last one falls.']
   ].map(([g, n, t]) => `${g[0] === '@' ? svgi(g.slice(1)) : `<img src="${unitIcon(1, g, c)}" alt="" style="width:28px;height:28px">`}<div><b>${n}</b> <span>${t}</span></div>`).join('');
   $('#agesList').innerHTML = AGES.map((ag, a) => `<div class="age"><b>${a + 1}. ${ag.name}</b><div class="row">${ROLE_UI.map(r => `<img src="${unitIcon(a, r, c)}" alt="${STATS[a][r].name}" title="${STATS[a][r].name}">`).join('')}</div></div>`).join('');
 }

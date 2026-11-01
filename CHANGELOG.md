@@ -26,6 +26,8 @@ All the updates to Ages at War, newest first.
 - Wall defenders take turns evenly and rest when there's nothing to shoot.
 
 ### Upgrades and controls
+- When several players share one screen, the upgrade cards wrap to a readable width and the panel scrolls, instead of shrinking names to a letter or two.
+- How to play mentions the three upgrade groups, Future-age boosts, the one starting wall defender and the Stone Age cap of three.
 - On wide screens the upgrades wrap around your controls: Troops fill the space to the left, Economy sits just above the troop buttons, and Fortress fills the space to the right. Narrower screens keep the bar above the controls.
 - In the Future age, an upgrade at its level cap becomes a Boost: each one gives all your troops +1% health and damage, including troops already in the field. Boosts cost a little more each time; the computer buys them too once everything is maxed.
 - Bigger text for the upgrades bar's header and the line describing each upgrade.
