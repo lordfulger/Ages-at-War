@@ -668,7 +668,15 @@ function audioGraph(c){
     bark:  rv(3, () => voiceBuf(c, {f0:rr(380, 450), f1:.6, dur:.15, v:'a', asp:.5, jit:.04, shift:1.2})),
     trumpetHi: rv(3, () => voiceBuf(c, {f0:rr(260, 300), f1:2, peak:.1, dur:.85, v:'a', vib:.04, vibF:11, asp:1, jit:.025, shim:.25, shift:1.35})),
     trumpetLo: rv(3, () => voiceBuf(c, {f0:rr(170, 200), f1:1.9, peak:.1, dur:.95, v:'a', vib:.04, vibF:10, asp:1, jit:.025, shim:.25, shift:1.2})),
-    creak: rv(4, () => creakBuf(c, {f0:rr(28, 40), f1:rr(45, 65), dur:rr(.45, .6)}))
+    creak: rv(4, () => creakBuf(c, {f0:rr(28, 40), f1:rr(45, 65), dur:rr(.45, .6)})),
+    howl:  rv(3, () => voiceBuf(c, {f0:rr(360, 430), f1:.85, peak:.45, dur:rr(1.1, 1.4), v:'u', vib:.012, vibF:5, asp:.35, jit:.012, shim:.12, shift:1.1})),
+    hornV: rv(2, () => voiceBuf(c, {f0:rr(105, 115), f1:1.05, dur:1.4, v:'o', vib:.006, vibF:5, asp:.7, jit:.01, shim:.08, shift:.85})),
+    gull:  rv(3, () => voiceBuf(c, {f0:rr(950, 1150), f1:.7, dur:rr(.25, .4), v:'a', asp:.45, jit:.05, shim:.3, shift:1.8})),
+    bird:  rv(6, () => birdBuf(c)),
+    moto:  rv(2, () => engineBuf(c, {f0:45, f1:110, dur:.9, res:[rr(180, 240), rr(700, 900), 1900], bw:[80, 160, 300]})),
+    jeep:  rv(2, () => engineBuf(c, {f0:28, f1:60, dur:.9, res:[rr(120, 160), rr(450, 600), 1300], bw:[70, 140, 260]})),
+    tank:  rv(2, () => engineBuf(c, {f0:14, f1:26, dur:1.1, res:[rr(70, 95), rr(260, 340), 900], bw:[50, 110, 220]})),
+    mbt:   rv(2, () => engineBuf(c, {f0:18, f1:32, dur:1.1, res:[rr(85, 110), rr(300, 380), 1100], bw:[55, 120, 240]}))
   };
   // plucked strings (Karplus-Strong) for bows, crossbows and ballistas
   A.ks = [196, 131, 330].map(f => { const n = Math.round(sr*.8), b = c.createBuffer(1, n, sr), y = b.getChannelData(0), N = Math.round(sr/f);
@@ -739,8 +747,8 @@ function setAmbience(){
 function ambientEvent(t){
   if (!S || A.mode === 'quiet' || !A.sfxLv) return;
   const r = Math.random(), d = A.amb;
-  if ((S.map === 'valley' || S.map === 'jungle') && r < (S.map === 'jungle' ? .06 : .03)){ const f = 2600 + Math.random()*900; tone(d, 'sine', f, t, .07, .03, {to: f*1.3}); tone(d, 'sine', f*1.1, t + .09, .07, .025, {to: f*1.45}); }
-  if (S.map === 'coast' && r < .006) tone(d, 'triangle', 1250, t, .35, .025, {to: 880, vib: 30, vibF: 9});
+  if ((S.map === 'valley' || S.map === 'jungle') && r < (S.map === 'jungle' ? .06 : .03)) say2(d, t, 'bird', .06, rr(.9, 1.1));
+  if (S.map === 'coast' && r < .006){ say2(d, t, 'gull', .05); if (Math.random() < .5) say2(d, t + .45, 'gull', .04); }
   if (S.map === 'sunset' && r < .05) hiss(d, t, .02, .03, 'bandpass', 3200, 3);
   if (S.map === 'winter' && r < .004) hiss(d, t, 1.6, .05, 'bandpass', 900, 4, 1500);
 }
@@ -855,16 +863,6 @@ function nb(d, t, dur, vol, o = {}){
   n.connect(g).connect(d);
   s.start(t, s.loop ? 0 : Math.random()*Math.max(0, b.duration - dur*rate - .05)); s.stop(t + dur + .02);
 }
-// struck metal: a few inharmonic sine partials, the higher ones dying first
-function ring(d, t, f, ratios, decay, vol){
-  const c = A.ctx, g = c.createGain(); g.gain.value = vol; g.connect(d);
-  ratios.forEach((r, k) => {
-    const o = c.createOscillator(), e = c.createGain(), dk = decay/(1 + k*.7);
-    o.frequency.value = f*r*rr(.985, 1.015);
-    e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(1/(1 + k*.5), t + .002); e.gain.setTargetAtTime(0, t + .002, dk/5);
-    o.connect(e).connect(g); o.start(t); o.stop(t + dk + .05);
-  });
-}
 // a plucked string from the stored Karplus-Strong buffers
 function pluck(d, t, k, rate, vol, lp, dur = .5){
   const c = A.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
@@ -901,6 +899,40 @@ function resonate(y, sr, fs, bws){
   });
   let m = 0; for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(y[i])); if (m) for (let i = 0; i < n; i++) y[i] /= m;
 }
+// a combustion engine: a train of firing pulses at the engine's rate, each a short bang, rung through the hull and exhaust
+function engineBuf(c, o){
+  const sr = c.sampleRate, n = Math.round(sr*o.dur), b = c.createBuffer(1, n, sr), y = b.getChannelData(0);
+  for (let i = 0, next = 0; i < n; i++){
+    const p = i/n, f = o.f0*Math.pow(o.f1/o.f0, Math.min(1, p/.6));
+    if (i >= next){
+      const env = Math.min(1, p*8)*Math.min(1, (1 - p)*5), a = env*(.6 + Math.random()*.4), L = Math.round(sr/f*.6);
+      for (let j = 0; j < L && i + j < n; j++){ const k = Math.exp(-j/(L*.22)); y[i + j] += a*((Math.random()*2 - 1)*.7*k + .8*k); }
+      next = i + sr/f*(1 + (Math.random() - .5)*.1);
+    }
+  }
+  resonate(y, sr, o.res, o.bw);
+  return b;
+}
+// a songbird's call: a few quick syllables, each a fast sweep with a trill, a touch of harmonic and breath
+function birdBuf(c){
+  const sr = c.sampleRate, n = Math.round(sr*.45), b = c.createBuffer(1, n, sr), y = b.getChannelData(0), syl = 2 + (Math.random()*3 | 0);
+  let at = 0;
+  for (let k = 0; k < syl; k++){
+    const len = Math.round(sr*rr(.04, .09)), f0 = rr(2400, 4200), f1 = f0*rr(.75, 1.35), tr = rr(25, 60), dep = rr(80, 300); let ph = 0;
+    for (let j = 0; j < len && at + j < n; j++){ const q = j/len, f = f0 + (f1 - f0)*q + Math.sin(2*Math.PI*tr*j/sr)*dep; ph += 2*Math.PI*f/sr; const e = Math.pow(Math.sin(Math.PI*q), 1.5);
+      y[at + j] += e*(Math.sin(ph) + .18*Math.sin(2*ph) + (Math.random() - .5)*.06); }
+    at += len + Math.round(sr*rr(.02, .06));
+  }
+  let m = 0; for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(y[i])); if (m) for (let i = 0; i < n; i++) y[i] /= m;
+  return b;
+}
+// a body blow, landing shell or drum: noisy low thump rather than a pure tone
+function thump(d, t, f, dur, vol){
+  nb(d, t, dur, vol*.9, {buf:A.brown, type:'lowpass', f:f*2.4, to:Math.max(60, f*1.1), toT:dur*.6, atk:.002});
+  nb(d, t, dur*.7, vol*.55, {buf:A.brown, f, q:2.2, atk:.002});
+}
+// struck metal or glass, small: a coin, a bell, a chime; narrow noisy partials instead of sine tones
+function chime(d, t, f, dur, vol){ for (const [r, v] of [[1, 1], [2.4, .5], [3.9, .3], [5.6, .18]]) nb(d, t, dur/(1 + r*.3), vol*v, {f:f*r*rr(.99, 1.01), q:rr(60, 90), atk:.001}); }
 // timber groaning under load: stick-slip clicks at a wandering rate, rung through the beam's own resonances
 function creakBuf(c, o){
   const sr = c.sampleRate, n = Math.round(sr*o.dur), b = c.createBuffer(1, n, sr), y = b.getChannelData(0);
@@ -928,7 +960,7 @@ function bang(d, t, far, o){
   const v = o.v || 1;
   if (far < .6) nb(d, t, .014, .5*v*o.crack, {type:'highpass', f:rr(2500, 4500)});
   nb(d, t, o.bd*rr(.85, 1.15), .55*v, {f:o.bf*rr(.8, 1.2), q:.7});
-  tone(d, 'sine', o.th*rr(.9, 1.1), t, o.thd, .45*v, {to:o.th*.35});
+  thump(d, t, o.th*rr(.9, 1.1), o.thd, .45*v);
   if (o.tail) nb(d, t + .008, o.tail*rr(.85, 1.15), .4*v*(o.tv || 1), {buf:A.brown, type:'lowpass', f:o.tf, atk:.006});
 }
 const GUN = {
@@ -973,9 +1005,7 @@ const SFX = {
     return n*gap + .15;
   },
   wolf(t, d){
-    if (Math.random() < .5){ const f = rr(380, 460);   // a howl
-      tone(d, 'sine', f, t, 1.1, .25, {to:f*1.55, toAt:.35, vib:6, vibF:5, atk:.15}); tone(d, 'sine', f*2.01, t, 1, .06, {to:f*3.1, toAt:.35, atk:.2});
-      nb(d, t, .9, .02, {f:f*3, q:2, atk:.2}); return 1.1; }
+    if (Math.random() < .5) return say2(d, t, 'howl', .55) + .05;   // a howl
     say2(d, t, 'snarl', .4); say2(d, t + .55, 'bark', .5);   // a snarl, then a bark
     return .75;
   },
@@ -1004,40 +1034,40 @@ const SFX = {
     if (h.age >= 9) return SFX.hum(t, d, far, h);
     if (v === 'steam'){   // chuffs, a whistle and the boiler's rumble
       for (let k = 0; k < 5; k++) nb(d, t + k*rr(.17, .2), .14, .4, {f:rr(700, 1000), q:.9, to:400, atk:.01});
-      tone(d, 'sine', 880, t + .05, .45, .05, {atk:.03}); tone(d, 'sine', 1110, t + .05, .45, .04, {atk:.03});
+      nb(d, t + .05, .45, .12, {f:880, q:30, atk:.03}); nb(d, t + .05, .45, .1, {f:1110, q:30, atk:.03}); nb(d, t + .05, .45, .05, {f:2400, q:3, atk:.03});   // a breathy steam whistle
       nb(d, t, 1, .25, {buf:A.brown, type:'lowpass', f:200, atk:.1}); return 1.1;
     }
-    const [f0, f1, lp, dur] = {moto:[70, 150, 1600, .9], jeep:[48, 95, 900, .9], tank:[30, 46, 380, 1.1], mbt:[34, 52, 450, 1.1]}[v] || [36, 58, 500, 1];
-    tone(d, 'sawtooth', f0, t, dur, .3, {to:f1, toAt:.6, lp, atk:.08, vib:f0*.08, vibF:rr(18, 26)});   // the motor revving, rough with firing pulses
-    tone(d, 'square', f0*.5, t, dur, .2, {to:f1*.5, toAt:.6, lp:lp*.6, atk:.08});
+    const kind = ['moto', 'jeep', 'tank', 'mbt'].includes(v) ? v : 'tank', lp = {moto:1600, jeep:900, tank:380, mbt:450}[kind];
+    const dur = say2(d, t, kind, .8, rr(.95, 1.05));   // the engine itself: firing pulses through the hull
     nb(d, t, dur, .25, {buf:A.brown, type:'lowpass', f:lp*.5, atk:.1});   // exhaust
     if (v === 'tank' || v === 'mbt') for (let k = 0; k < 6; k++) nb(d, t + .1 + k*rr(.11, .14), .04, .12, {f:rr(2200, 3400), q:6});   // track links
-    if (v === 'mbt') tone(d, 'sine', 1300, t, dur, .03, {to:2200, atk:.2});   // turbine whine
+    if (v === 'mbt') nb(d, t, dur, .05, {f:1300, q:14, to:2200, toT:dur, atk:.2});   // turbine whine
     return dur + .1;
   },
   hum(t, d, far, h){
     if (h.d && h.d.v === 'mech'){   // servos whirring, then two heavy metal footfalls
-      tone(d, 'sawtooth', rr(180, 220), t, .35, .12, {to:420, bp:900, q:3, atk:.03}); tone(d, 'sawtooth', 420, t + .4, .3, .1, {to:200, bp:800, q:3});
-      for (const k of [.3, .85]){ stomp(d, t + k, .45); ring(d, t + k, rr(140, 170), [1, 1.48, 2.1], .25, .05); }
+      nb(d, t, .35, .18, {f:rr(500, 700), q:7, to:1400, atk:.03}); nb(d, t + .4, .3, .15, {f:1300, q:7, to:600, atk:.02});   // hydraulics whirring
+      nb(d, t + .2, .12, .08, {type:'highpass', f:3000, atk:.01});   // a hiss of air
+      for (const k of [.3, .85]){ stomp(d, t + k, .45); steel(d, t + k, rr(140, 170), .3, .05); }
       return 1.1;
     }
-    tone(d, 'sine', rr(300, 360), t, .9, .07, {to:rr(1500, 1800), toAt:.7, atk:.1});   // turbine spooling up
-    tone(d, 'triangle', 90, t, .9, .12, {to:140, atk:.1});
+    nb(d, t, .9, .1, {f:rr(300, 360), q:12, to:rr(1500, 1800), toT:.65, atk:.1});   // turbine spooling up
+    nb(d, t, .9, .25, {buf:A.brown, type:'lowpass', f:180, atk:.1});
     nb(d, t, .9, .12, {f:1800, q:.8, to:3500, atk:.15});
     return 1;
   },
   // ---- interface
-  queue:   (t, d) => tone(d, 'triangle', 880, t, .05, .07),
-  click:   (t, d) => tone(d, 'triangle', 1400, t, .03, .05),
-  coin:    (t, d) => { tone(d, 'square', 1320, t, .05, .05); tone(d, 'square', 1760, t + .05, .08, .05); return .15; },
-  nope:    (t, d) => tone(d, 'square', 160, t, .08, .06),
-  upgrade: (t, d) => { [0,4,7,12].forEach((n, k) => tone(d, 'square', hz(523.25, n), t + k*.07, .14, .07)); return .45; },
+  queue:   (t, d) => { nb(d, t, .04, .25, {f:2200, q:4}); nb(d, t, .05, .15, {buf:A.brown, type:'lowpass', f:500}); return .08; },   // a wooden tap
+  click:   (t, d) => { nb(d, t, .025, .2, {f:3200, q:5}); return .05; },
+  coin:    (t, d) => { chime(d, t, rr(2700, 3100), .3, .07); chime(d, t + rr(.05, .08), rr(3200, 3600), .25, .05); return .4; },   // coins clinking
+  nope:    (t, d) => { nb(d, t, .09, .35, {buf:A.brown, type:'lowpass', f:260}); nb(d, t, .05, .15, {f:380, q:3}); return .12; },   // a dull wooden knock
+  upgrade: (t, d) => { [0, 4, 7].forEach((n, k) => chime(d, t + k*.08, hz(1046.5, n), .9, .05)); return 1; },   // a small bell
   age:     (t, d) => { leadNotes(d, t, [0,7,12,16,19,24], .1, 1); KIT.crash(d, t + .5, 1); return 1.8; },
-  heal:    (t, d) => { tone(d, 'sine', 880, t, .25, .05, {to: 1320}); tone(d, 'sine', 1320, t + .08, .2, .03, {to: 1760}); return .3; },
+  heal:    (t, d) => { nb(d, t, .25, .08, {f:rr(2500, 3500), q:1.2, atk:.05}); chime(d, t + .05, rr(1700, 1900), .5, .02); return .5; },   // a bandage rustle, a soft chime
   win:     (t, d) => { leadNotes(d, t, [0,4,7,12,7,12], .14, 1.2); KIT.crash(d, t + .7, 1); hiss(d, t + .3, 2.2, .12, 'bandpass', 900, .8); hiss(d, t + .5, 2, .08, 'bandpass', 1600, .8); return 2.6; },
   lose:    (t, d) => { leadNotes(d, t, [7,5,3,0], .24, 1.2); return 2; },
-  horn:    (t, d) => { tone(d, 'sawtooth', 110, t, 1.4, .16, {lp: 700, lpTo: 1400, atk: .15, vib: 2}); tone(d, 'sawtooth', 165, t + .1, 1.3, .1, {lp: 700, atk: .15}); return 1.5; },
-  build(t, d){ for (let k = 0; k < 3; k++){ const tt = t + k*rr(.16, .2); tone(d, 'sine', rr(170, 200), tt, .1, .3, {to:90}); nb(d, tt, .06, .25, {f:rr(1000, 1600), q:2.5}); } return .7; },
+  horn:    (t, d) => { say2(d, t, 'hornV', .7, 1); say2(d, t + .1, 'hornV', .4, 1.5); return 1.5; },   // a war horn blown
+  build(t, d){ for (let k = 0; k < 3; k++){ const tt = t + k*rr(.16, .2); thump(d, tt, rr(170, 200), .1, .3); nb(d, tt, .06, .25, {f:rr(1000, 1600), q:2.5}); } return .7; },
   // ---- thrown and shot
   whoosh(t, d, far, h){
     const rock = h.kind === 'rock' || (h.kind !== 'javelin' && h.age === 0), f = rock ? rr(350, 550) : rr(900, 1300);
@@ -1050,18 +1080,18 @@ const SFX = {
     nb(d, t, .05, .25, {buf:A.crk, f:2500, q:.8});                                   // trigger and rope letting go
     say2(d, t, 'creak', .5, rr(1.1, 1.3));                                             // timber creaking under the load
     nb(d, t + .02, .3, .2, {f:rr(300, 450), q:1, to:1200, atk:.12});                   // the arm sweeping through the air
-    tone(d, 'sine', rr(100, 130), t + .16, .3, .45, {to:50});                           // and slamming into the crossbar
+    thump(d, t + .16, rr(100, 130), .3, .45);                           // and slamming into the crossbar
     nb(d, t + .16, .14, .35, {f:rr(250, 400), q:2});
     nb(d, t + .16, .4, .3, {buf:A.brown, type:'lowpass', f:220});
     return .6;
   },
   twang(t, d, far, h){
     if (h.d && h.d.f === 's'){   // ballista: a huge skein string and a heavy wooden thunk
-      pluck(d, t, 1, rr(.45, .55), .5, 1500, .6); nb(d, t, .03, .35, {f:1800, q:3}); tone(d, 'sine', 120, t, .2, .4, {to:60});
+      pluck(d, t, 1, rr(.45, .55), .35, 900, .16); nb(d, t, .03, .35, {f:1800, q:3}); thump(d, t, 120, .2, .45);
       nb(d, t + .02, .35, .15, {f:500, q:1.2, to:1400, atk:.05}); return .65;
     }
-    if (h.kind === 'bolt' || h.age >= 3){ nb(d, t, .025, .3, {f:rr(2500, 3500), q:4}); tone(d, 'square', rr(800, 1000), t, .02, .06, {lp:3000}); pluck(d, t, 2, rr(.95, 1.15), .35, 4500, .25); }   // crossbow: latch clack, short taut string
-    else { pluck(d, t, 0, rr(.9, 1.12), .4, rr(2500, 3500), .4); nb(d, t, .012, .2, {type:'highpass', f:2500}); }   // bow: string and slap on the bracer
+    if (h.kind === 'bolt' || h.age >= 3){ nb(d, t, .025, .35, {f:rr(2500, 3500), q:4}); nb(d, t, .015, .25, {f:rr(900, 1200), q:6}); pluck(d, t, 2, rr(.95, 1.15), .2, 2500, .07); nb(d, t, .06, .3, {buf:A.brown, type:'lowpass', f:400}); }   // crossbow: latch clack, a short snap of string, the stock kicking
+    else { nb(d, t, .02, .35, {f:rr(1600, 2200), q:1.2}); pluck(d, t, 0, rr(.7, .85), .18, 1100, .08); nb(d, t, .07, .3, {buf:A.brown, type:'lowpass', f:rr(250, 350)}); }   // bow: the string slapping the bracer, a brief thrum, the limbs snapping forward
     nb(d, t + .015, .2, .07, {f:rr(1600, 2200), q:1.5, to:800, atk:.02});   // fletching hissing away
     return .45;
   },
@@ -1081,13 +1111,13 @@ const SFX = {
     const shell = h.kind === 'shell' || (!h.kind && h.age >= 6);
     if (far < .6) nb(d, t, .025, .6, {type:'highpass', f: shell ? 3000 : 1800});
     nb(d, t, shell ? .45 : .8, .7, {type:'lowpass', f: shell ? 2200 : 1300, to:250, toT:.3});              // muzzle blast
-    tone(d, 'sine', shell ? 95 : 70, t, shell ? .45 : .7, .6, {to:28});                                    // concussion
+    thump(d, t, shell ? 95 : 70, shell ? .45 : .7, .6);                                    // concussion
     nb(d, t + .02, shell ? 1.1 : 1.6, .5, {buf:A.brown, type:'lowpass', f: shell ? 500 : 380, atk:.02, hold:.05});   // the report rolling away
     return shell ? 1.2 : 1.7;
   },
   rocket(t, d){
     nb(d, t, .06, .4, {type:'lowpass', f:1500});   // ignition
-    tone(d, 'sine', 140, t, .12, .3, {to:60});
+    thump(d, t, 140, .12, .3);
     nb(d, t + .02, .9, .3, {f:600, q:.7, to:2500, toT:.5, atk:.04, hold:.15});   // motor roar
     nb(d, t + .02, .9, .35, {buf:A.brown, type:'lowpass', f:500, atk:.03, hold:.15});
     nb(d, t + .05, .6, .06, {type:'highpass', f:5000, atk:.05});
@@ -1095,26 +1125,26 @@ const SFX = {
   },
   zap(t, d, far, h){
     if (h.kind === 'plasma'){   // ion cannon: a thick falling discharge
-      tone(d, 'sawtooth', 420, t, .55, .2, {to:55, lp:2500, lpTo:300, det:-12}); tone(d, 'sawtooth', 425, t, .55, .15, {to:60, lp:2500, lpTo:300, det:12});
-      tone(d, 'sine', 110, t, .5, .45, {to:35}); nb(d, t, .5, .15, {f:3000, q:4, to:500}); return .6;
+      nb(d, t, .55, .3, {f:1400, q:6, to:120, toT:.5, atk:.01}); nb(d, t, .5, .3, {buf:A.crk, type:'highpass', f:1500, atk:.005});
+      thump(d, t, 110, .5, .5); nb(d, t, .5, .15, {f:3000, q:4, to:500}); return .6;
     }
     const f = rr(1700, 2100);
-    tone(d, 'sawtooth', f, t, .16, .1, {to:f*.12, lp:5000, det:-15}); tone(d, 'square', f*1.01, t, .14, .06, {to:f*.13, lp:4000});
-    tone(d, 'sine', f*1.6, t, .1, .06, {to:f*.4}); nb(d, t, .05, .12, {type:'highpass', f:5000});
-    tone(d, 'sine', 220, t, .1, .2, {to:70});
+    nb(d, t, .16, .3, {f, q:8, to:f*.15, toT:.14, atk:.002}); nb(d, t, .12, .2, {f:f*1.6, q:5, to:f*.4, toT:.1, atk:.002});   // the bolt's crack sweeping down
+    nb(d, t, .1, .2, {buf:A.crk, type:'highpass', f:2500, atk:.002}); nb(d, t, .05, .12, {type:'highpass', f:5000});
+    thump(d, t, 220, .1, .2);
     return .2;
   },
   // ---- blows and impacts
   clash(t, d, far, h){
     const a = h.age, v = h.d && h.d.f === 'v' && h.d.v;
     if (v){   // rams, war wagons, tanks and walkers: a heavy crunching blow
-      const steel = a >= 6;
-      tone(d, 'sine', rr(70, 90), t, .3, 1.2, {to:40});
-      nb(d, t, .3, 1.2, {buf:A.brown, type:'lowpass', f:steel ? 500 : 350});
-      if (steel) ring(d, t, rr(150, 220), [1, 1.47, 2.09, 2.56], .35, .25); else nb(d, t, .3, .8, {buf:A.crk, f:rr(1200, 1800), q:.7});
+      const metal = a >= 6;
+      thump(d, t, rr(70, 90), .3, 1.2);
+      nb(d, t, .3, 1.2, {buf:A.brown, type:'lowpass', f:metal ? 500 : 350});
+      if (metal) steel(d, t, rr(150, 220), .4, .25); else nb(d, t, .3, .8, {buf:A.crk, f:rr(1200, 1800), q:.7});
       return .5;
     }
-    if (a >= 9){ tone(d, 'sawtooth', rr(110, 140), t, .3, .12, {to:70, bp:900, q:2, vib:15, vibF:40}); nb(d, t, .15, .25, {type:'highpass', f:3500}); ring(d, t, rr(2400, 3000), [1, 1.5], .15, .06); return .35; }   // energy blades
+    if (a >= 9){ nb(d, t, .3, .22, {f:rr(700, 1000), q:5, to:300, atk:.01}); nb(d, t, .2, .25, {buf:A.crk, type:'highpass', f:2500}); nb(d, t, .15, .25, {type:'highpass', f:3500}); steel(d, t, rr(2400, 3000), .15, .05); return .35; }   // energy blades
     const bronze = a <= 2, f = bronze ? rr(800, 1300) : rr(1400, 2400);
     nb(d, t, .035, .3, {type:'highpass', f: bronze ? 2000 : 3500});   // edge scraping edge
     steel(d, t, f, bronze ? .2 : .55, bronze ? .1 : .08);   // ringing blade
@@ -1146,13 +1176,13 @@ const SFX = {
   },
   bash(t, d){   // a shield slammed into the enemy
     nb(d, t, .16, .55, {f:rr(200, 320), q:1.8}); nb(d, t, .2, .5, {buf:A.brown, type:'lowpass', f:240});
-    tone(d, 'sine', rr(90, 120), t, .14, .3, {to:50}); return .3;
+    thump(d, t, rr(90, 120), .14, .3); return .3;
   },
   thud(t, d){
     swish(d, t, .2, rr(350, 500));
     t += .08;
     nb(d, t, .07, .4, {f:rr(320, 520), q:2.2});   // club on bone
-    tone(d, 'sine', rr(120, 160), t, .12, .35, {to:60});
+    thump(d, t, rr(120, 160), .12, .35);
     nb(d, t, .14, .4, {buf:A.brown, type:'lowpass', f:300});
     if (Math.random() < .4) nb(d, t + rr(.06, .14), .05, .15, {f:rr(500, 900), q:2});
     return .25;
@@ -1160,7 +1190,7 @@ const SFX = {
   boom(t, d, far, h){
     const k = h.kind || (h.age < 4 ? 'boulder' : h.age < 6 ? 'ball' : 'shell');
     if (!['shell', 'rocket', 'plasma', 'laser'].includes(k)){   // solid shot: ground impact and scattering earth
-      tone(d, 'sine', rr(75, 95), t, .4, .55, {to:38});
+      thump(d, t, rr(75, 95), .4, .55);
       nb(d, t, .45, .5, {buf:A.brown, type:'lowpass', f:600});
       nb(d, t + .01, k === 'ball' || k === 'boulder' ? .8 : .55, .35, {buf:A.crk, type:'lowpass', f:rr(2500, 4000), atk:.01});
       if (far < .6) nb(d, t, .03, .25, {f:rr(500, 900), q:1.5});
@@ -1168,15 +1198,15 @@ const SFX = {
     }
     // explosives: blast crack, chest thump, roaring body, crackling debris and a sub rumble
     if (far < .5) nb(d, t, .03, .5, {type:'lowpass', f:4500});
-    tone(d, 'sine', rr(100, 130), t, .6, .6, {to:30});
+    thump(d, t, rr(100, 130), .6, .6);
     nb(d, t, 1.1, .7, {buf:A.brown, type:'lowpass', f:1000, to:160, toT:.8, atk:.004});
     nb(d, t + .04, .9, .3, {buf:A.crk, f:rr(1800, 2800), q:.6, atk:.02});
-    tone(d, 'sine', 48, t, 1.3, .3, {to:30, atk:.04});
-    if (k === 'plasma' || k === 'laser') tone(d, 'sawtooth', 900, t, .3, .05, {to:80, lp:3000});
+    thump(d, t, 48, 1.3, .3);
+    if (k === 'plasma' || k === 'laser') nb(d, t, .4, .2, {buf:A.crk, type:'highpass', f:1800, atk:.005});   // the charge crackling out
     return 1.4;
   },
   wall(t, d){
-    tone(d, 'sine', rr(60, 80), t, .35, .5, {to:36});
+    thump(d, t, rr(60, 80), .35, .5);
     nb(d, t, .4, .45, {buf:A.brown, type:'lowpass', f:450});
     nb(d, t, .03, .25, {f:rr(900, 1500), q:1});
     nb(d, t + .03, rr(.4, .7), .3, {buf:A.crk, f:rr(2000, 3200), q:.7, atk:.01});   // chips and grit raining down
@@ -1187,16 +1217,16 @@ const SFX = {
   fall(t, d, far, h){
     const tt = t + rr(.08, .18), metal = h.age >= 2 && h.age <= 4;
     nb(d, tt, .16, .45, {buf:A.brown, type:'lowpass', f:rr(180, 260)});
-    tone(d, 'sine', rr(80, 100), tt, .14, .3, {to:45});
+    thump(d, tt, rr(80, 100), .14, .3);
     nb(d, tt + .01, .2, metal ? .2 : .1, {buf:A.crk, type:'highpass', f: metal ? 3000 : 1500});   // kit and armour rattling
     return .4;
   },
   wreck(t, d, far, h){
     if (h.age >= 6){   // a machine blows apart: explosion, torn metal ringing, falling debris
-      SFX.boom(t, d, far, {kind:'shell'}); ring(d, t + .03, rr(160, 220), [1, 1.47, 2.09, 2.56, 3.3], .8, .07);
+      SFX.boom(t, d, far, {kind:'shell'}); steel(d, t + .03, rr(160, 220), .9, .07);
       nb(d, t + .15, 1.4, .25, {buf:A.crk, f:rr(2500, 4000), q:.7, atk:.05}); return 1.6;
     }
-    tone(d, 'sine', rr(60, 75), t, .55, .5, {to:32});
+    thump(d, t, rr(60, 75), .55, .5);
     nb(d, t, .7, .5, {buf:A.brown, type:'lowpass', f:500});
     nb(d, t, 1.1, .45, {buf:A.crk, f:rr(1400, 2200), q:.6, atk:.005});   // timber splintering
     say2(d, t + .05, 'creak', .45, rr(.6, .75));   // a beam groaning as it gives
@@ -1206,20 +1236,18 @@ const SFX = {
   crackle(t, d){ nb(d, t, .5, .35, {buf:A.crk, f:rr(1500, 3500), q:.6, atk:.01}); nb(d, t, .6, .12, {buf:A.brown, type:'lowpass', f:400, atk:.15, hold:.1}); return .6; },
   // ---- barrages
   whistle(t, d){   // a falling shell: Doppler-dropping whistle that swells as it nears
-    const c = A.ctx, o = c.createOscillator(), g = c.createGain(), f = rr(1900, 2300), T = .85;
-    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f*.3, t + T);
-    g.gain.setValueAtTime(.01, t); g.gain.linearRampToValueAtTime(.1, t + T*.9); g.gain.linearRampToValueAtTime(0, t + T);
-    o.connect(g).connect(d); o.start(t); o.stop(t + T + .02);
-    nb(d, t, T, .08, {f, q:5, to:f*.3, toT:T, atk:T*.85});   // air tearing past
+    const f = rr(1900, 2300), T = .85;
+    nb(d, t, T, .2, {f, q:25, to:f*.3, toT:T, atk:T*.85});   // the shell's shriek, falling in pitch as it nears
+    nb(d, t, T, .1, {f, q:5, to:f*.3, toT:T, atk:T*.85});    // air tearing past
     return T;
   },
   rain(t, d, far, h){
-    if (h.age >= 1) for (let k = 0; k < 3; k++) pluck(d, t + k*.03 + rr(0, .02), 0, rr(.85, 1.15), .15, 3000, .3);   // the volley loosed
+    if (h.age >= 1) for (let k = 0; k < 3; k++){ const tt = t + k*.03 + rr(0, .02); nb(d, tt, .02, .2, {f:rr(1600, 2200), q:1.2}); pluck(d, tt, 0, rr(.7, .85), .1, 1100, .07); }   // the volley loosed
     for (let k = 0; k < 7; k++){ const f = rr(1500, 3000); nb(d, t + .1 + k*.07 + rr(0, .05), rr(.3, .45), .09, {f, q:2, to:f*.5, atk:.15}); }   // shafts hissing overhead
     return .9;
   },
-  orbital(t, d){ tone(d, 'sawtooth', 90, t, 1.2, .15, {to: 900, lp: 3000}); tone(d, 'sine', 3000, t + .6, .5, .05, {to: 200}); nb(d, t + .7, .5, .1, {type:'highpass', f:4000, atk:.2}); tone(d, 'sine', 55, t, 1.2, .2, {to:40, atk:.4}); return 1.3; },
-  drums(t, d){ for (const [k, v] of [[0, .3], [.45, .22]]){ tone(d, 'sine', rr(68, 76), t + k, .45, v, {to:46}); nb(d, t + k, .08, v*.5, {f:rr(200, 300), q:1.2}); } return 1; }
+  orbital(t, d){ nb(d, t, 1.2, .25, {f:150, q:4, to:1500, toT:1.1, atk:.3}); nb(d, t + .6, .6, .2, {buf:A.crk, type:'highpass', f:2000, atk:.2}); nb(d, t + .7, .5, .1, {type:'highpass', f:4000, atk:.2}); nb(d, t, 1.2, .35, {buf:A.brown, type:'lowpass', f:120, atk:.4}); return 1.3; },
+  drums(t, d){ for (const [k, v] of [[0, .3], [.45, .22]]){ thump(d, t + k, rr(68, 76), .45, v); nb(d, t + k, .08, v*.5, {f:rr(200, 300), q:1.2}); } return 1; }
 };
 const GAP = {slash:.07, stab:.07, bash:.08, heal:.15, crackle:.25, horn:1, drums:1.5, clash:.07, thud:.07, twang:.06, wall:.12, fall:.05, grunt:.1, coin:.08, boom:.1, launch:.1, shot:.05, zap:.06, whoosh:.08, cannon:.12, rocket:.12, wreck:.2, whistle:.2, rain:.3, click:.03,
   foot:.15, creak:.2, engine:.25, hum:.25, wolf:.3, mammoth:.3, camel:.3, elephant:.3, horse:.3, build:.1};

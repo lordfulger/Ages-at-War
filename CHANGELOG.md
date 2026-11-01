@@ -39,6 +39,7 @@ All the updates to Ages at War, newest first.
 - Troop buttons show each troop's class, and tooltips name it.
 
 ### Sound
+- No more electronic-sounding effects. Bows and wall archers now give a string slap and a brief thrum instead of a ringing note; crossbows a latch clack and snap. Engines are built from real firing pulses, Future weapons and mechs crackle and hiss, the falling-shell shriek, war horn and wolf howl are natural, kill rewards clink like coins, upgrades ring a small bell, medics rustle, interface taps sound like wood, and the birds and gulls are real calls. Every impact thump is noise-based. Only the music still uses instruments.
 - Animal calls (horse neighs, camel grunts, wolf snarls and barks, mammoth and elephant trumpets) and creaking timber on catapults, siege engines and wrecks no longer sound electronic: they use natural rendered voices and real stick-slip wood creaks.
 - Troop voices sound human instead of robotic: grunts, effort sounds and a shout as troops march out.
 - Each melee weapon has its own sound: swords swing and clang or cut, spears and pikes thrust, clubs swing and land, shields bash.
