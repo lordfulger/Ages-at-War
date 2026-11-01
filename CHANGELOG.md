@@ -51,6 +51,8 @@ All the updates to Ages at War, newest first.
 - Better troop art: faces, hands, a proper stride, shading, and more detailed mounts and machines.
 
 ### Online and lobby
+- Players who join an online game see the host's full setup: the lineup, colors, civilizations, map, skill and speed. They can change their own color and civilization, and switch side; everything else stays the host's to set.
+- Online games no longer stop when the host switches to another tab: the battle keeps running in the background for everyone. The host's menu (Esc or the pause button) no longer pauses an online battle either, and a host holding their phone upright doesn't stop the game. Offline games still pause when you leave the tab.
 - The lobby keeps joined players when the lineup changes, and allows at most two players per side on one phone.
 - Zones and orders pass to a teammate when a fortress falls.
 - Kill bounties go only to commanders who are still standing.

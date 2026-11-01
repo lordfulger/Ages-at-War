@@ -180,6 +180,11 @@ body.upWrap:not(.upBig) .g1 .upCards{grid-template-columns:repeat(auto-fill,minm
   .upHead button{width:22px;height:22px}
 }
 .upCard.off{filter:grayscale(.7) brightness(.6)}
+/* a player who joined online sees the host's setup; only their own color, civilization and side are theirs to change */
+body.netClient #presets,body.netClient .slot,body.netClient #diffSeg,body.netClient #mapSeg,body.netClient #speedSeg{pointer-events:none}
+body.netClient #presets,body.netClient #diffSeg,body.netClient #mapSeg,body.netClient #speedSeg{opacity:.75}
+body.netClient .sw:disabled,body.netClient .cv:disabled{opacity:.7;cursor:default}
+#sideBtn{margin-top:6px}
 .upCard.busy{box-shadow:inset 0 0 0 2px #3fbf55}
 .seg4{grid-template-columns:repeat(4,1fr)}
 #mapPreview{display:block;width:100%;aspect-ratio:16/6;border-radius:10px;border:1.5px solid var(--edge);background:#140d08}
@@ -333,6 +338,7 @@ details[open].card summary::after{content:" −"}
           </div>
           <p class="note" id="civNote">Tap a civilization under a commander to change it.</p>
           <p class="note" id="lineupNote"></p>
+          <button class="chip" id="sideBtn" type="button" hidden>Switch side</button>
           <div id="diffBox" class="lineup">
             <div class="label">Computer skill</div>
             <div class="seg" id="diffSeg"><button class="chip" data-d="easy">Easy</button><button class="chip" data-d="normal">Normal</button><button class="chip" data-d="hard">Hard</button><button class="chip" data-d="brutal">Brutal</button><button class="chip" data-d="nightmare">Nightmare</button><button class="chip" data-d="insane">Insane</button></div>
@@ -401,7 +407,8 @@ details[open].card summary::after{content:" −"}
 
   <div class="overlay" id="pauseOv" hidden>
     <div class="panel">
-      <h1 style="font-size:44px">Paused</h1>
+      <h1 style="font-size:44px" id="pauseTitle">Paused</h1>
+      <p class="note" id="pauseNote" hidden>Online games don't pause: the battle carries on while this menu is open.</p>
       <button class="cta" id="resumeBtn">Resume</button>
       <div id="pauseOpts"></div>
       <button class="cta ghost" id="quitBtn">Quit to menu</button>
@@ -2208,6 +2215,7 @@ function renderLineup(){
     const b = document.getElementById(`slot-${s}-${i}`), k = lineup[s][i] || 'none';
     const owner = NET.owners[`${s}-${i}`];
     b.dataset.kind = k; b.textContent = k === 'online' ? (owner ? NET.names[owner] || 'Online' : 'Waiting…') : KIND_LABEL[k]; b.disabled = i === 2 && !lineup[s][1];
+    if (NET.role === 'client' && NET.lobby){ const lb = NET.lobby.labels && NET.lobby.labels[s] && NET.lobby.labels[s][i]; if (lb) b.textContent = String(lb).slice(0, 20); if (isMine(s, i)) b.dataset.kind = 'human'; }
     b.setAttribute('aria-label', `${SIDE_NAME[s]} commander ${i+1}: ${KIND_LABEL[k]}. Tap to change.`);
   }
   const key = JSON.stringify(lineup);
@@ -2224,8 +2232,11 @@ function renderLineup(){
   if (lineup.some(side => side.filter(k => k === 'human').length === 2)) note += ' Teammates split their side, and each has their own gold, age, upgrades and fortress.';
   const n0 = lineup[0].length, n1 = lineup[1].length;
   if (n0 !== n1){ const big = n0 > n1 ? 0 : 1; note += ` Uneven fight: ${SIDE_NAME[big]} has ${Math.max(n0, n1)} commanders and earns about ${Math.round((Math.sqrt(Math.max(n0, n1)/Math.min(n0, n1)) - 1)*100)}% more gold.`; }
+  if (NET.role === 'client') note = NET.mySeat ? `You are ${COLORS[colors[NET.mySeat[0]][NET.mySeat[1]]].name}, on the ${SIDE_NAME[NET.mySeat[0]]} side. Tap your color or civilization to change it. The host sets up the rest.` : 'Waiting for the host to give you a place…';
   $('#lineupNote').textContent = note;
+  $('#sideBtn').hidden = !(NET.role === 'client' && NET.mySeat);
   renderSwatches(); netLobby(); netShow();
+  if (NET.role === 'client') return;   // the host's setup, shown here, is not this player's own
   store.set('lineup', lineup); store.set('diff', diff); store.set('map', mapPick); store.set('civs', civs); store.set('speed', speedPick);
 }
 // online lobby: every commander slot is {k, owner}; working on that list keeps joined players attached to their slot as it moves
@@ -2258,6 +2269,7 @@ function applyPreset(lu){
   for (const id of ids) claimSlot(id);
 }
 $('#menu').addEventListener('click', e => {
+  if (NET.role === 'client') return;   // the host sets up the battle
   const slot = e.target.closest('.slot'), chip = e.target.closest('[data-p]'), d = e.target.closest('[data-d]'), m = e.target.closest('[data-m]'), sp = e.target.closest('[data-sp]');
   if (slot && !slot.disabled){
     const [, s, i] = slot.id.split('-').map(Number), side = lineup[s], cur = side[i] || 'none';
@@ -4114,24 +4126,35 @@ function renderSwatches(){
       cv.hidden = !lineup[s][i]; cv.title = civ.desc;
       const html = (civs[s][i] > 0 && civs[s][i] < CIV_RANDOM ? `<img src="${civIcon(civs[s][i])}" alt="">` : '') + civ.name; if (cv.innerHTML !== html) cv.innerHTML = html;
       cv.setAttribute('aria-label', `Commander ${i + 1} civilization: ${civ.name}, ${civ.desc}. Tap to change.`);
+      const locked = NET.role === 'client' && !isMine(s, i); b.disabled = locked; cv.disabled = locked;
     }
   }
   setToggles();
 }
+const isMine = (s, i) => !!NET.mySeat && NET.mySeat[0] === s && NET.mySeat[1] === i;
+// the next free color for a commander: only commanders in the lineup hold their colors; an empty slot hands its color over and takes the old one
+function cycleColor(s, i){
+  const start = colors[s][i], used = new Set(colors.flatMap((row, t) => row.filter((k, j) => lineup[t][j] && !(t === s && j === i))));
+  let k = start; do { k = (k + 1) % COLORS.length; } while (used.has(k) && k !== start);
+  for (let t = 0; t < 2; t++) for (let j = 0; j < 3; j++) if (colors[t][j] === k && !(t === s && j === i)) colors[t][j] = start;
+  colors[s][i] = k;
+}
+$('#sideBtn').addEventListener('click', () => { if (NET.role === 'client'){ sendAll({t:'pick', what:'side'}); sfx('click'); } });
 $('#menu').addEventListener('click', e => {
   const b = e.target.closest('.sw'), cv = e.target.closest('.cv');
+  if (NET.role === 'client'){   // a joined player asks the host to change their own color or civilization
+    const el = b || cv; if (!el || el.disabled) return;
+    const [, s, i] = el.id.split('-').map(Number); if (!isMine(s, i)) return;
+    sendAll({t:'pick', what: b ? 'col' : 'civ'}); sfx('click'); return;
+  }
   if (cv){
     const [, s, i] = cv.id.split('-').map(Number); civs[s][i] = (civs[s][i] + 1) % CIVS.length;
     const civ = CIVS[civs[s][i]]; $('#civNote').textContent = `${civ.name}: ${civ.desc}.`;
     store.set('civs', civs); renderSwatches(); netLobby(); sfx('click');
   }
   if (b){
-    // only commanders in the lineup hold their colors; an empty slot hands its color over and takes the old one
-    const [, s, i] = b.id.split('-').map(Number), start = colors[s][i];
-    const used = new Set(colors.flatMap((row, t) => row.filter((k, j) => lineup[t][j] && !(t === s && j === i))));
-    let k = start; do { k = (k + 1) % COLORS.length; } while (used.has(k) && k !== start);
-    for (let t = 0; t < 2; t++) for (let j = 0; j < 3; j++) if (colors[t][j] === k && !(t === s && j === i)) colors[t][j] = start;
-    colors[s][i] = k; store.set('colors', colors); applyColors(colors); renderLineup();
+    const [, s, i] = b.id.split('-').map(Number);
+    cycleColor(s, i); store.set('colors', colors); applyColors(colors); renderLineup();
   }
 });
 
@@ -4369,7 +4392,8 @@ function startBattle(){
 }
 function togglePause(on){
   if (!S || S.mode === 'demo' || S.over >= 0) return;
-  paused = on; $('#pauseOv').hidden = !on; if (on){ $('#pauseOpts').appendChild($('#optGrid')); setToggles(); tiltNote(); } else homeOpts(); A.mode = on ? 'quiet' : 'battle'; setAmbience();
+  paused = on; $('#pauseOv').hidden = !on;
+  $('#pauseTitle').textContent = NET.role ? 'Menu' : 'Paused'; $('#pauseNote').hidden = !NET.role; $('#resumeBtn').textContent = NET.role ? 'Back to battle' : 'Resume'; if (on){ $('#pauseOpts').appendChild($('#optGrid')); setToggles(); tiltNote(); } else homeOpts(); A.mode = on ? 'quiet' : 'battle'; setAmbience();
 }
 function endGame(winner){
   S.over = winner;
@@ -4397,8 +4421,9 @@ for (const id of ['musicT']) document.getElementById(id).addEventListener('click
 for (const id of ['sfxT']) document.getElementById(id).addEventListener('click', () => { audioInit(); A.sfxLv = (A.sfxLv + 2) % 3; store.set('sfxLv', A.sfxLv); setToggles(); sfx('click'); });
 document.addEventListener('pointerdown', audioInit, {once:true});
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden){ if (S && S.mode === 'battle' && S.over < 0 && !paused && !NET.role) togglePause(true); if (A.ctx) A.ctx.suspend(); }
-  else { if (A.ctx) A.ctx.resume(); if (S && S.mode === 'battle') keepAwake(); }
+  // offline games pause while the tab is hidden; online games carry on for everyone, the host's simulation kept going in the background
+  if (document.hidden){ if (S && S.mode === 'battle' && S.over < 0 && !paused && !NET.role) togglePause(true); if (NET.role === 'host') backgroundTicks(true); if (A.ctx) A.ctx.suspend(); }
+  else { backgroundTicks(false); if (A.ctx) A.ctx.resume(); if (S && S.mode === 'battle') keepAwake(); }
 });
 
 function buildGuide(){
@@ -4446,7 +4471,8 @@ function netShow(){
   $('#netIdle').hidden = on || !ok; $('#netBox').hidden = !on;
   $('#netNote').textContent = !ok ? 'Online play works in the app version, or when the game is on a website. This preview supports players sharing one phone.'
     : on ? '' : 'Host a game and tell your friends the room code, or type their code to join. Works between Android and iPhone, over Wi-Fi or mobile data.';
-  $('#lineupCard').hidden = client; $('#startBtn').hidden = client;
+  $('#lineupCard').hidden = client && !NET.lobby; $('#startBtn').hidden = client;
+  document.body.classList.toggle('netClient', client);
   $('#setupBtn').hidden = NET.role !== 'host';
   const ban = $('#netBanner'); ban.hidden = NET.role !== 'host';
   if (NET.role === 'host') ban.textContent = `Online room ${NET.code}: ${Object.keys(NET.owners).length} friend${Object.keys(NET.owners).length === 1 ? '' : 's'} joined. Online slots are filled in the order friends join.`;
@@ -4459,7 +4485,17 @@ function sendAll(m){ for (const c of NET.conns) if (c.open) try { c.send(m); } c
 function leaveNet(quiet){
   for (const c of NET.conns) try { c.close(); } catch(e){}
   try { if (NET.peer) NET.peer.destroy(); } catch(e){}
-  Object.assign(NET, {role:null, peer:null, conns:[], code:'', mySeat:null, owners:{}, names:{}, joined:0, sounds:[]});
+  const wasLobby = NET.lobby; Object.assign(NET, {role:null, peer:null, conns:[], code:'', mySeat:null, owners:{}, names:{}, joined:0, sounds:[]}); NET.lobby = wasLobby;
+  if (NET.lobby){   // a joined player gets their own saved setup back
+    NET.lobby = null;
+    lineup = store.get('lineup', null); if (!validLineup(lineup)) lineup = [['human'],['cpu']];
+    colors = store.get('colors', null); if (!validCols(colors)) colors = JSON.parse(JSON.stringify(DEFAULT_COLS));
+    civs = store.get('civs', null); if (!validCivs(civs)) civs = [[0,0,0],[0,0,0]];
+    mapPick = store.get('map', 'random'); if (mapPick !== 'random' && !MAPS.includes(mapPick)) mapPick = 'random';
+    diff = store.get('diff', 'normal'); if (!DIFF[diff]) diff = 'normal';
+    speedPick = store.get('speed', 1); if (!SPEEDS[speedPick]) speedPick = 1;
+    applyColors(colors);
+  }
   lineup = lineup.map(side => side.map(k => k === 'online' || k === 'remote' ? 'cpu' : k));
   if (!quiet){ renderLineup(); netShow(); }
 }
@@ -4511,6 +4547,14 @@ function hostLost(conn){
   renderLineup();
 }
 function onHostData(conn, m){
+  if (m && m.t === 'pick' && !(S && S.mode === 'battle' && S.over < 0)){   // a joined player changes their own color, civilization or side
+    const key = ownerKey(conn.peer); if (!key) return;
+    const [s, i] = key.split('-').map(Number);
+    if (m.what === 'col'){ cycleColor(s, i); store.set('colors', colors); applyColors(colors); }
+    else if (m.what === 'civ'){ civs[s][i] = (civs[s][i] + 1) % CIVS.length; store.set('civs', civs); }
+    else if (m.what === 'side') for (let n = 0; n < 6; n++){ const k2 = ownerKey(conn.peer); if (!k2 || +k2[0] !== s) break; moveJoined(...k2.split('-').map(Number)); }
+    renderLineup(); return;
+  }
   if (m && m.t === 'chat'){ const key = ownerKey(conn.peer); hostChat(key ? key.split('-').map(Number) : null, m.text); return; }
   if (!m || m.t !== 'act' || !S || S.mode !== 'battle') return;
   const key = ownerKey(conn.peer); if (!key) return;
@@ -4529,7 +4573,11 @@ function onHostData(conn, m){
 }
 function netLobby(){
   if (NET.role !== 'host') return;
-  for (const c of NET.conns){ const key = ownerKey(c.peer); if (c.open) try { c.send({t:'lobby', seat: key ? key.split('-').map(Number) : null, cols: colors, civs}); } catch(e){} }
+  for (const c of NET.conns){
+    const key = ownerKey(c.peer); if (!c.open) continue;
+    const labels = lineup.map((side, s) => side.map((k, i) => { const o = NET.owners[`${s}-${i}`]; return `${s}-${i}` === key ? 'You' : k === 'human' ? 'Host' : k === 'online' ? (o ? NET.names[o] || 'Online' : 'Waiting…') : KIND_LABEL[k]; }));
+    try { c.send({t:'lobby', seat: key ? key.split('-').map(Number) : null, cols: colors, civs, lineup, labels, map: mapPick, diff, speed: speedPick}); } catch(e){}
+  }
 }
 function netStart(){
   if (NET.role !== 'host') return;
@@ -4573,6 +4621,14 @@ function onClientData(m){
     const seat = m.seat;
     const civ = seat && m.civs && CIVS[m.civs[seat[0]][seat[1]]];
     netStatus(seat ? `Joined room ${NET.code} as ${COLORS[m.cols[seat[0]][seat[1]]].name}${civ ? ` (${civ.name})` : ''}, on the ${COLORS[m.cols[seat[0]][0]].name} side. Waiting for the host to start…` : `Joined room ${NET.code}. Waiting for the host…`);
+    // show the host's setup here, read-only apart from this player's own color, civilization and side
+    if (validLineup(m.lineup) && validCols(m.cols) && validCivs(m.civs)){
+      NET.lobby = m; NET.mySeat = Array.isArray(seat) ? seat : null;
+      lineup = m.lineup; colors = m.cols; civs = m.civs;
+      if (m.map === 'random' || MAPS.includes(m.map)) mapPick = m.map;
+      if (DIFF[m.diff]) diff = m.diff; if (SPEEDS[m.speed]) speedPick = m.speed;
+      applyColors(colors); renderLineup(); previewMap();
+    }
     return;
   }
   if (m.t === 'start'){ clientStart(m); return; }
@@ -4738,20 +4794,35 @@ $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Escape') chatO
 const portrait = window.matchMedia('(orientation: portrait)');
 let last = performance.now(), ambT = 0;
 function musicAge(){ const hs = [0,1].filter(humanSide), list = hs.length ? hs : [0,1]; return Math.max(...list.map(sideAge)); }
-function frame(now){
-  const dt = Math.min(.05, (now - last)/1000); last = now;
-  const blocked = S && S.mode === 'battle' && portrait.matches;
+// the simulation and the online traffic for one step; drawing is separate, so a hidden host tab can keep the game going
+function simStep(dt){
+  const blocked = S && S.mode === 'battle' && portrait.matches && !document.hidden && NET.role !== 'host';   // online, a host holding the phone upright doesn't stop everyone
   const sp = S && S.mode === 'battle' ? S.speed || 1 : 1, steps = sp > 1 ? 2 : 1;   // faster games take two smaller steps a frame
   if (NET.role === 'client' && S && S.mode === 'battle') clientStep(dt*sp);
-  else if (S && !paused && S.over < 0 && !blocked) for (let k = 0; k < steps && S.over < 0; k++) update(dt*sp/steps);
+  else if (S && (!paused || NET.role === 'host') && S.over < 0 && !blocked) for (let k = 0; k < steps && S.over < 0; k++) update(dt*sp/steps);   // online, the host's menu never stops the battle
   else if (S && S.over >= 0){ for (const f of S.fx) f.t += dt; S.fx = S.fx.filter(f => f.t < f.dur); }
   if (S){ moveCam(dt); A.nextStyle = styleForAge(musicAge()); }
+  if (NET.role === 'host' && S && S.mode === 'battle' && NET.conns.length){ NET.snapT += dt; if (NET.snapT >= .1){ NET.snapT = 0; hostSnap(); } }
+}
+function frame(now){
+  const dt = Math.min(.05, (now - last)/1000); last = now;
+  simStep(dt);
   draw(); drawPreview();
   if (S && S.mode !== 'demo'){ syncUI(); drawMini(); }
-  if (NET.role === 'host' && S && S.mode === 'battle' && NET.conns.length){ NET.snapT += dt; if (NET.snapT >= .1){ NET.snapT = 0; hostSnap(); } }
   ambT += dt;
   if (ambT > 1){ ambT = 0; setAmbience(); if (S && S.mode === 'battle' && !paused && dayNight().dark > .35 && Math.random() < .12) sfx('drums', cam.x + span/2); }
   requestAnimationFrame(frame);
+}
+// browsers stop animation frames in a hidden tab, which would freeze an online game for everyone while the host looks elsewhere;
+// a worker's timer keeps running there, so it drives the simulation (without drawing) until the tab is visible again
+let bgWorker = null;
+function backgroundTicks(on){
+  if (on && !bgWorker){
+    try {
+      bgWorker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 50)'], {type:'text/javascript'})));
+      bgWorker.onmessage = () => { if (!document.hidden) return; const now = performance.now(); let dt = Math.min(.5, (now - last)/1000); last = now; while (dt > 0){ const d = Math.min(.05, dt); simStep(d); dt -= d; } };
+    } catch(e){ bgWorker = null; }
+  } else if (!on && bgWorker){ bgWorker.terminate(); bgWorker = null; last = performance.now(); }
 }
 function boot(data){
   applyColors(colors); renderLineup(); setToggles();
