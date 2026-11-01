@@ -2464,6 +2464,22 @@ function rallyX(u, st){
 }
 // a troop past the zone it was ordered to hold falls back to it, even mid-fight (fighting as it goes)
 const fallsBack = (u, rx) => rx != null && (rx - u.x)*dirOf(u.side) < -20;
+// troops holding a zone sally out against anything that comes within a leash of it, forming up on the enemy as an attacking army would,
+// but never chase past the leash: this returns the x to advance to, or null if nothing is in reach
+const HOLD_LEASH = ZONE_R*1.7;
+function holdTarget(u, st){
+  const sd = S.sides[u.side].seats[u.seat]; if (!sd || !sd.rally || !S.zones) return null;
+  const d = dirOf(u.side), zx = zoneX(sd.rally - 1), edge = zx + d*HOLD_LEASH;
+  let best = null, bd = 1e9;
+  for (const e of S.units){ if (e.side === u.side || e.dead) continue; const dz = (e.x - zx)*d; if (dz > HOLD_LEASH + 60 || dz < -HOLD_LEASH) continue; const dist = Math.abs(e.x - u.x); if (dist < bd){ bd = dist; best = e; } }
+  if (!best) return null;
+  return d > 0 ? Math.min(edge, best.x - d*st.r) : Math.max(edge, best.x - d*st.r);
+}
+// a fighting troop inside the leash of its held zone stands its ground; only one past the leash (or with nothing to fight) pulls back
+function holdsLine(u, st){
+  const sd = S.sides[u.side].seats[u.seat]; if (!sd || !sd.rally || !S.zones) return false;
+  return (u.x - zoneX(sd.rally - 1))*dirOf(u.side) <= HOLD_LEASH + 10 && holdTarget(u, st) != null;
+}
 // walk toward x (forward or back), facing the way the troop walks
 function walkTo(u, st, x, dt){
   const off = x - u.x; if (Math.abs(off) < 4){ u.back = false; return; }
@@ -2756,7 +2772,9 @@ function update(dt){
     if (st.guard){   // shields push to the front of the line and stop at the first enemy, taking the blows meant for the troops behind
       const blocked = S.units.some(e => e.side !== u.side && !e.dead && (e.x - u.x)*d > -10 && Math.abs(e.x - u.x) < st.r + statOf(e).r + 4);
       const rx = rallyX(u, st);
-      if (fallsBack(u, rx)) walkTo(u, st, rx, dt);   // ordered back: shields give ground toward the zone
+      const hx = rx != null ? holdTarget(u, st) : null;
+      if (hx != null && !blocked) walkTo(u, st, hx, dt);   // an enemy near the held zone: shields lead the sally
+      else if (fallsBack(u, rx)) walkTo(u, st, rx, dt);   // ordered back: shields give ground toward the zone
       else if (blocked) u.back = false;
       else if (rx != null) walkTo(u, st, rx, dt);
       else { u.back = false; u.x += d*st.speed*(u.spd || 1)*dt; u.step += dt*st.speed/7; u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r); }
@@ -2783,11 +2801,13 @@ function update(dt){
       }
       // ordered to hold a zone behind them: they back toward it, still striking at anything in reach, and turn to face the foe as they strike
       const rx = rallyX(u, st);
-      if (fallsBack(u, rx)){ walkTo(u, st, rx, dt); if (u.lunge > 0) u.back = false; }
+      if (fallsBack(u, rx) && !holdsLine(u, st)){ walkTo(u, st, rx, dt); if (u.lunge > 0) u.back = false; }
     } else {
       const blind = st.minRange && S.units.some(e => e.side !== u.side && !e.dead && Math.abs(e.x - u.x) < st.minRange + 20);   // siege waits for its escort
       const rx = rallyX(u, st);
-      if (rx != null && !(blind && (rx - u.x)*d > 0)) walkTo(u, st, rx, dt);   // ordered to hold a zone: go there, back the way they came if need be (siege still waits for its escort)
+      const hx = rx != null && !blind ? holdTarget(u, st) : null;
+      if (hx != null) walkTo(u, st, hx, dt);   // an enemy near the held zone: close on it and form up, as an attacking army would
+      else if (rx != null && !(blind && (rx - u.x)*d > 0)) walkTo(u, st, rx, dt);   // ordered to hold a zone: go there, back the way they came if need be (siege still waits for its escort)
       else if (rx != null) u.back = false;
       else { u.back = false; if (!blind){ u.x += d * st.speed * (u.spd || 1) * dt; u.step += dt * st.speed / 7; } }
       u.x = u.side === 0 ? Math.min(u.x, front(1) - st.r) : Math.max(u.x, front(0) + st.r);
