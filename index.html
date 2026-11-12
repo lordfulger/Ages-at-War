@@ -2493,7 +2493,7 @@ function troopBoost(sd, role, what){
 }
 // money and experience both pass through here, so a swap can send one into the other
 // (the exchange matches what each is worth over time, with a bonus for using it)
-const XP_PER_GOLD = .4, GOLD_PER_XP = 1.5;   // kills give a lot of experience, so a richer rate would let a defender out-earn every attack
+const XP_PER_GOLD = .4, GOLD_PER_XP = 1.5;
 function earn(sd, gold, xp){
   const f = sd.focus && sd.focus.k;
   if (f === 'xp'){ sd.xp += xp + gold*XP_PER_GOLD; }
@@ -2567,7 +2567,7 @@ function hurtUnit(e, amt, src){
     const foeS = 1 - e.side, foe = S.sides[foeS], st = statOf(e), cut = src === 'def' ? .5 : 1;   // wall kills pay half
     const bounty = st.cost * .2 * cut;
     const standing = foe.seats.filter(sd => sd.alive), nb = standing.length || 1;
-    standing.forEach(sd => earn(sd, bounty / nb * (1 + .05*sd.up.plunder) * bm(sd, 'plunder'), st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length)));
+    standing.forEach(sd => earn(sd, bounty / nb * (1 + .05*sd.up.plunder) * bm(sd, 'plunder'), 0));   // kills pay gold only; experience comes with time
     S.fx.push({k:'corpse', d:st.d, age:e.age, civ:e.civ, side:e.side, col:e.col, x:e.x, z:e.z, t:0, dur:4});
     S.fx.push({k:'coin', x:e.x, z:e.z, t:0, dur:.9, txt:'+' + Math.round(bounty)});
     if (st.d.f === 'v' || st.d.f === 's'){ S.fx.push({k:'boom', x:e.x, z:e.z, t:0, dur:.55, big:true, seed:Math.random()}); sfx('wreck', e.x); }
@@ -2763,7 +2763,7 @@ function update(dt){
       if (sd.shake > 0) sd.shake -= dt;
       if (!sd.alive) return;
       if (sd.focus && (sd.focus.t -= dt) <= 0) sd.focus = null;
-      earn(sd, income(sd, s) * dt * (isAI(sd) && S.mode === 'battle' ? D.mult : 1), dt * 3 * Math.pow(1.3, maxAge) * xpMult(s, sd));  // experience is paced by the leader so anyone behind can catch up
+      earn(sd, income(sd, s) * dt * (isAI(sd) && S.mode === 'battle' ? D.mult : 1), dt * 3.3 * Math.pow(1.3, maxAge) * xpMult(s, sd));  // experience is paced by the leader so anyone behind can catch up
       if (sd.q.length){ sd.qt += dt; const it = sd.q[0]; if (sd.qt >= trainTime(sd, it)){ spawn(s, i, sd.q.shift()); sd.qt = 0; } }
       if (sd.res.length){ const r = sd.res[0]; r.t += dt * resSpeed(sd); if (r.t >= r.dur) finishResearch(s, sd); }
       if (sd.bar > 0) sd.bar -= dt;

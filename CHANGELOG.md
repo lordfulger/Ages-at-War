@@ -11,6 +11,7 @@ All the updates to Ages at War, newest first.
 - The battlefield preview in battle setup looks the same on phones as on PC, instead of zoomed in.
 
 ### Troops and combat
+- Kills pay gold only. Experience toward the next age now comes from time alone (10% faster than before, to make up for it) and from damaging enemy fortresses.
 - Barrages hit far harder: about 2.6 times the damage, enough to kill fighters, ranged troops, pikes and medics outright and badly hurt everything else. Gas clouds are stronger to match.
 - Troops holding a zone now go out to meet any enemy that comes near it, forming up on the enemy the way an attacking army does, so nobody stands idle out of range. They never chase further than a short distance past the zone, and they return to their spots once it's clear.
 - Each fortress starts with one wall defender and can have at most three in the Stone Age, so the opening has to be fought in the field. From the Bronze Age the usual limit applies (up to ten with Garrison).
