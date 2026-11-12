@@ -11,6 +11,7 @@ All the updates to Ages at War, newest first.
 - The battlefield preview in battle setup looks the same on phones as on PC, instead of zoomed in.
 
 ### Troops and combat
+- Barrages hit far harder: about 2.6 times the damage, enough to kill fighters, ranged troops, pikes and medics outright and badly hurt everything else. Gas clouds are stronger to match.
 - Troops holding a zone now go out to meet any enemy that comes near it, forming up on the enemy the way an attacking army does, so nobody stands idle out of range. They never chase further than a short distance past the zone, and they return to their spots once it's clear.
 - Each fortress starts with one wall defender and can have at most three in the Stone Age, so the opening has to be fought in the field. From the Bronze Age the usual limit applies (up to ten with Garrison).
 - The computer goes for zones: when the armies are about even it sends its troops to the nearest zone it doesn't hold, as long as the enemy near it is weaker, and keeps the furthest zone it does hold otherwise. Well ahead, it attacks and takes zones on the way.
@@ -30,7 +31,7 @@ All the updates to Ages at War, newest first.
 - When several players share one screen, the upgrade cards wrap to a readable width and the panel scrolls, instead of shrinking names to a letter or two.
 - How to play mentions the three upgrade groups, Future-age boosts, the one starting wall defender and the Stone Age cap of three.
 - On wide screens the upgrades wrap around your controls: Troops fill the space to the left, Economy sits just above the troop buttons, and Fortress fills the space to the right. Narrower screens keep the bar above the controls.
-- In the Future age, an upgrade at its level cap becomes a Boost: each one gives all your troops +1% health and damage, including troops already in the field. Boosts cost a little more each time; the computer buys them too once everything is maxed.
+- In the Future age, an upgrade at its level cap becomes a Boost that adds 1% to what that upgrade does: Weapons +1% damage, Armor +1% health, Trade +1% income, Walls +1% fortress health, and so on. Troops already in the field get it too. Boosts cost a little more each time; the computer buys them too once everything is maxed.
 - Bigger text for the upgrades bar's header and the line describing each upgrade.
 - The upgrades bar is split into three labeled groups: Troops on the left, Economy in the middle and Fortress on the right. On narrower screens the groups wrap onto a second line instead of sliding off the edge.
 - Upgrade text is larger and easier to read; on wide screens each card shows icon, name and price on one line.

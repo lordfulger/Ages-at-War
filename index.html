@@ -601,7 +601,7 @@ const BARRAGE = [
   {kind:'shell', n:8, name:'Artillery barrage'}, {kind:'gas', n:7, name:'Gas attack'}, {kind:'drone', n:5, name:'Drone strike'},
   {kind:'laser', n:7, name:'Orbital strike'}
 ];
-const BARRAGE_R = 110;
+const BARRAGE_R = 110, BARRAGE_DMG = 180;   // a barrage hit kills light troops outright and badly hurts heavier ones
 // three capture zones spread across the open field; a commander who holds one earns a little more gold
 const ZONES = 3, ZONE_R = 90, ZONE_GOLD = .1, ZONE_TIME = 2.5;
 const zoneX = k => { const a = FORT*S.sides[0].seats.length, b = L - FORT*S.sides[1].seats.length; return a + (b - a)*(k + 1)/(ZONES + 1); };
@@ -2343,7 +2343,9 @@ function sideAge(s){ const ages = S.sides[s].seats.filter(sd => sd.alive).map(sd
 function fortFrac(s){ const sd = S.sides[s].seats[frontSeat(s)]; return sd.hp/sd.max; }
 const isAI = sd => sd.kind === 'cpu';
 const share = s => 1/Math.sqrt(S.sides[s].seats.length);   // more commanders means more gold in total, but not double
-const income = (sd, s) => Math.round((10 + sd.up.trade*3) * PRICE(sd.age) * share(s) * CV(sd, 'gold') * (1 + ZONE_GOLD*zonesHeld(s, sd)));
+// a boost on a maxed upgrade (last age only) adds 1% to what that upgrade does
+const bm = (sd, k) => 1 + .01*((sd.bst && sd.bst[k]) || 0);
+const income = (sd, s) => Math.round((10 + sd.up.trade*3) * PRICE(sd.age) * share(s) * CV(sd, 'gold') * (1 + ZONE_GOLD*zonesHeld(s, sd)) * bm(sd, 'trade'));
 const sideUp = (s, k) => Math.max(...S.sides[s].seats.map(sd => sd.up[k]));
 const defenders = (s, i) => 1 + S.sides[s].seats[i].def;   // every fortress starts with one
 const live = () => S && S.over < 0 && !paused;
@@ -2351,15 +2353,15 @@ const can = sd => !!sd && sd.alive && live();
 // an upgrade's price comes from its level; each age only adds 8%, so an untouched upgrade stays cheap late in the game
 const upCost = (sd, k, lvl) => round5(UPG[k].base * Math.pow(1.17, lvl) * Math.pow(1.08, sd.age));
 const qCap = sd => 5 + sd.up.logistics;
-const trainTime = (sd, it) => STATS[it.a][it.r].train / ((1 + .06*sd.up.drill) * CV(sd, 'train'));
-const resSpeed = sd => (1 + .12*sd.up.scholars) * CV(sd, 'res');
+const trainTime = (sd, it) => STATS[it.a][it.r].train / ((1 + .06*sd.up.drill) * CV(sd, 'train') * bm(sd, 'drill') * bm(sd, 'logistics'));   // Logistics boosts speed up the training line
+const resSpeed = sd => (1 + .12*sd.up.scholars) * CV(sd, 'res') * bm(sd, 'scholars');
 // at most three in the Stone Age, so nobody can hide behind the walls in the opening; from the Bronze Age up to six, plus Garrison
 const defMax = sd => sd.age === 0 ? 2 : DEF_COST.length + 1 + sd.up.garrison;
 const defCost = (sd, n) => round5((DEF_COST[n] || DEF_COST[DEF_COST.length - 1]*Math.pow(1.3, n - DEF_COST.length + 1)) * PRICE(sd.age));
-const barrageCd = sd => 45 / (1 + .1*sd.up.barrage);
+const barrageCd = sd => 45 / ((1 + .1*sd.up.barrage) * bm(sd, 'barrage'));
 const humanSide = s => NET.role === 'client' && NET.mySeat ? s === NET.mySeat[0] : S.sides[s].seats.some(sd => sd.kind === 'human' || sd.kind === 'remote');
-function xpMult(s, sd){ const D = DIFF[S.diff] || DIFF.normal; return (1 + .08*sd.up.scholars) * CV(sd, 'xp') * (S.mode === 'battle' && !humanSide(s) ? D.xp : 1); }
-function maxHp(s, i){ const side = S.sides[s], sd = side.seats[i]; return Math.round(BASE_HP * Math.pow(1.35, sd.age) * (1 + .1*sd.up.walls) * CV(sd, 'fort')); }
+function xpMult(s, sd){ const D = DIFF[S.diff] || DIFF.normal; return (1 + .08*sd.up.scholars) * bm(sd, 'scholars') * CV(sd, 'xp') * (S.mode === 'battle' && !humanSide(s) ? D.xp : 1); }
+function maxHp(s, i){ const side = S.sides[s], sd = side.seats[i]; return Math.round(BASE_HP * Math.pow(1.35, sd.age) * (1 + .1*sd.up.walls) * bm(sd, 'walls') * CV(sd, 'fort')); }
 function refreshMax(s){ S.sides[s].seats.forEach((sd, i) => { if (!sd.alive) return; const m = maxHp(s, i); sd.hp = Math.min(m, sd.hp + Math.max(0, m - sd.max)); sd.max = m; }); }
 function say(txt, s, i){ S.msgs.push({txt, col: s == null ? '#f6ead2' : PAL[s][i || 0].hi, t:0, dur:2.8}); if (S.msgs.length > 3) S.msgs.shift(); }
 const tag = s => humanSide(0) && humanSide(1) ? `${SIDE_NAME[s]}: ` : '';
@@ -2386,8 +2388,13 @@ function buyDefender(s, i){
 }
 // in the last age a maxed-out upgrade becomes a boost: +1% health and damage for all of that commander's troops
 const LAST_AGE = AGES.length - 1;
+const BOOST_WHAT = {weapons:'troop damage', armor:'troop health', trade:'income', drill:'training speed', march:'troop speed', range:'ranged and siege reach',
+  medics:'healing', plunder:'gold from kills', scholars:'experience and research speed', towers:'wall defender damage', walls:'fortress health',
+  rapid:'wall defender fire rate', pitch:'boiling oil damage', garrison:'wall defender fire rate', gate:'fortress damage resistance', barrage:'barrage strength and recharge',
+  formation:'fighter, shield and heavy health', ballistics:'ranged damage', mounts:'fast troop speed and health', engineering:'siege damage to fortresses',
+  logistics:'training speed', watch:'wall defender reach', shields:'damage resistance'};
 const canBoost = (sd, k) => sd.age >= LAST_AGE && sd.up[k] + sd.res.filter(r => r.kind === k && !r.boost).length >= maxLvl(k, sd.age);
-const boostCost = sd => round5(300 * Math.pow(1.08, sd.age) * Math.pow(1.06, (sd.boost || 0) + sd.res.filter(r => r.boost).length));
+const boostCost = sd => round5(300 * Math.pow(1.08, sd.age) * Math.pow(1.06, Object.values(sd.bst || {}).reduce((a, b) => a + b, 0) + sd.res.filter(r => r.boost).length));
 function research(s, i, kind){
   const sd = S.sides[s].seats[i], U = UPG[kind]; if (!can(sd)) return false;
   if (canBoost(sd, kind)){
@@ -2403,10 +2410,17 @@ function research(s, i, kind){
 }
 function finishResearch(s, sd){
   const r = sd.res.shift(), i = S.sides[s].seats.indexOf(sd);
-  if (r.boost){   // troops already in the field get it too
-    const b = sd.boost = (sd.boost || 0) + 1, f = (1 + .01*b)/(1 + .01*(b - 1));
-    for (const u of S.units) if (u.side === s && u.seat === i && !u.dead){ u.max *= f; u.hp *= f; u.dm = (u.dm || 1)*f; }
-    if (!isAI(sd)){ sfx('upgrade'); say(`${tag(s)}Boost: troops +${b}% health and damage`, s, i); }
+  if (r.boost){   // +1% to what this upgrade does; troops already in the field get their share
+    const k = r.kind; sd.bst = sd.bst || {};
+    const before = {}; for (const u of S.units) if (u.side === s && u.seat === i && !u.dead) before[u.id] = {hp:troopBoost(sd, u.role, 'hp'), dm:troopBoost(sd, u.role, 'dm'), spd:troopBoost(sd, u.role, 'spd')};
+    const n = sd.bst[k] = (sd.bst[k] || 0) + 1, step = (1 + .01*n)/(1 + .01*(n - 1));
+    for (const u of S.units) if (u.side === s && u.seat === i && !u.dead){
+      const b = before[u.id], fh = troopBoost(sd, u.role, 'hp')/b.hp, fd = troopBoost(sd, u.role, 'dm')/b.dm, fs = troopBoost(sd, u.role, 'spd')/b.spd;
+      u.max *= fh; u.hp *= fh; u.dm = (u.dm || 1)*fd; u.spd = (u.spd || 1)*fs;
+      if (k === 'range') u.rng = (u.rng || 1)*step; else if (k === 'medics') u.heal = (u.heal || 0)*step; else if (k === 'engineering') u.fm = (u.fm || 1)*step; else if (k === 'shields') u.tk = (u.tk || 1)/step;
+    }
+    if (k === 'walls') refreshMax(s);
+    if (!isAI(sd)){ sfx('upgrade'); say(`${tag(s)}${UPG[k].label} boost: +${n}%`, s, i); }
     return;
   }
   sd.up[r.kind]++;
@@ -2453,7 +2467,7 @@ function barrage(s, i){
   if (!tgt){ if (sd.kind === 'human') sfx('nope'); return false; }
   const x = tgt.x;
   sd.bar = barrageCd(sd);
-  S.fx.push({k:'barrage', side:s, x, age:sd.age, lvl:sd.up.barrage, t:0, dur:1.2, hit:false, seed:Math.random()*1000});
+  S.fx.push({k:'barrage', side:s, x, age:sd.age, lvl:sd.up.barrage + ((sd.bst && sd.bst.barrage) || 0)/10, t:0, dur:1.2, hit:false, seed:Math.random()*1000});
   sfx(sd.age >= 9 ? 'orbital' : sd.age === 8 ? 'hum' : sd.age >= 4 ? 'whistle' : 'rain', x);
   if (!isAI(sd)) say(`${tag(s)}${BARRAGE[sd.age].name}!`, s, i);
   return true;
@@ -2462,15 +2476,21 @@ function spawn(s, i, it){
   const st = STATS[it.a][it.r], sd = S.sides[s].seats[i], n = S.sides[s].seats.length;
   const U = sd.up, role = it.r;
   const hpM = 1 + .04*(sd.rank || 0) + .06*U.armor + (role === 'inf' || role === 'heavy' || role === 'shield' ? .06*U.formation : 0) + (role === 'fast' ? .06*U.mounts : 0);
-  const z = (i + Math.random())/n, bst = 1 + .01*(sd.boost || 0), hp = st.hp * hpM * CV(sd, 'hp') * bst;
+  const z = (i + Math.random())/n, hp = st.hp * hpM * CV(sd, 'hp') * troopBoost(sd, role, 'hp');
   S.units.push({id:S.nextId++, side:s, seat:i, role:it.r, age:it.a, x: front(s) + dirOf(s)*(st.r + 4), z, hp, max:hp,
-    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * (st.dmg > 0 ? CV(sd, 'dmg') : 1) * bst, spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd'),
-    civ:sd.civ || 0, rng:1 + .04*U.range, heal:.004*U.medics, fm:1 + .05*U.engineering, tk:1/(1 + .07*U.shields),
+    atk:.2, dm:(1 + .04*(sd.rank || 0) + .06*U.weapons + (role === 'rng' ? .06*U.ballistics : 0)) * (st.dmg > 0 ? CV(sd, 'dmg') : 1) * troopBoost(sd, role, 'dm'), spd:(1 + .04*U.march + (role === 'fast' ? .06*U.mounts : 0)) * CV(sd, 'spd') * troopBoost(sd, role, 'spd'),
+    civ:sd.civ || 0, rng:(1 + .04*U.range) * bm(sd, 'range'), heal:.004*U.medics*bm(sd, 'medics'), fm:(1 + .05*U.engineering) * bm(sd, 'engineering'), tk:1/((1 + .07*U.shields) * bm(sd, 'shields')),
     hit:0, lunge:0, step:Math.random()*6, col: n > 1 ? i : 0});
   const d = st.d;
   sfx(d.f === 'm' ? d.m : d.f === 'v' ? (it.a >= 6 ? (d.v === 'hover' || d.v === 'mech' ? 'hum' : 'engine') : 'creak') : d.f === 's' ? (it.a >= 6 ? 'engine' : 'creak') : 'foot', front(s));
 }
 const statOf = u => STATS[u.age][u.role];
+// the boosts that apply to one troop's health, damage or speed, by its role
+function troopBoost(sd, role, what){
+  if (what === 'hp') return bm(sd, 'armor') * (role === 'inf' || role === 'heavy' || role === 'shield' ? bm(sd, 'formation') : 1) * (role === 'fast' ? bm(sd, 'mounts') : 1);
+  if (what === 'dm') return bm(sd, 'weapons') * (role === 'rng' ? bm(sd, 'ballistics') : 1);
+  return bm(sd, 'march') * (role === 'fast' ? bm(sd, 'mounts') : 1);
+}
 // money and experience both pass through here, so a swap can send one into the other
 // (the exchange matches what each is worth over time, with a bonus for using it)
 const XP_PER_GOLD = .4, GOLD_PER_XP = 1.5;   // kills give a lot of experience, so a richer rate would let a defender out-earn every attack
@@ -2547,7 +2567,7 @@ function hurtUnit(e, amt, src){
     const foeS = 1 - e.side, foe = S.sides[foeS], st = statOf(e), cut = src === 'def' ? .5 : 1;   // wall kills pay half
     const bounty = st.cost * .2 * cut;
     const standing = foe.seats.filter(sd => sd.alive), nb = standing.length || 1;
-    standing.forEach(sd => earn(sd, bounty / nb * (1 + .05*sd.up.plunder), st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length)));
+    standing.forEach(sd => earn(sd, bounty / nb * (1 + .05*sd.up.plunder) * bm(sd, 'plunder'), st.cost * (sd.age < e.age ? .5 : .25) * cut * xpMult(foeS, sd) / Math.sqrt(foe.seats.length)));
     S.fx.push({k:'corpse', d:st.d, age:e.age, civ:e.civ, side:e.side, col:e.col, x:e.x, z:e.z, t:0, dur:4});
     S.fx.push({k:'coin', x:e.x, z:e.z, t:0, dur:.9, txt:'+' + Math.round(bounty)});
     if (st.d.f === 'v' || st.d.f === 's'){ S.fx.push({k:'boom', x:e.x, z:e.z, t:0, dur:.55, big:true, seed:Math.random()}); sfx('wreck', e.x); }
@@ -2558,7 +2578,7 @@ function hurtUnit(e, amt, src){
 function hurtBase(s, amt){
   if (S.over >= 0) return;
   const i = frontSeat(s), sd = S.sides[s].seats[i]; if (!sd.alive) return;
-  sd.hp = Math.max(0, sd.hp - amt/(1 + .05*sd.up.gate)); sd.shake = .2; sd.lastHit = S.t; sfx('wall', gateX(s, i));
+  sd.hp = Math.max(0, sd.hp - amt/((1 + .05*sd.up.gate) * bm(sd, 'gate'))); sd.shake = .2; sd.lastHit = S.t; sfx('wall', gateX(s, i));
   const att = S.sides[1 - s]; att.seats.forEach(o => { if (o.alive) earn(o, 0, amt * .05 * xpMult(1 - s, o) / Math.sqrt(att.seats.length)); });
   if (sd.hp <= 0) fortFalls(s, i);
 }
@@ -2760,19 +2780,19 @@ function update(dt){
         if (sd.pitchT <= 0){
           sd.pitchT = 1;
           let hit = false;
-          for (const e of S.units) if (e.side !== s && !e.dead && Math.abs(e.x - gate) < 90){ hurtUnit(e, 6*POW(sd.age)*sd.up.pitch, 'def'); hit = true; }
+          for (const e of S.units) if (e.side !== s && !e.dead && Math.abs(e.x - gate) < 90){ hurtUnit(e, 6*POW(sd.age)*sd.up.pitch*bm(sd, 'pitch'), 'def'); hit = true; }
           if (hit){ S.fx.push({k:'smoke', x:gate + dirOf(s)*30, z:.5, h:.25, t:0, dur:1.2, seed:Math.random()}); sfx('crackle', gate); }
         }
       }
       sd.defT -= dt;
       if (sd.defT <= 0){
-        let best = null, bd = DEF_RANGE*(1 + .06*sd.up.watch);
+        let best = null, bd = DEF_RANGE*(1 + .06*sd.up.watch)*bm(sd, 'watch');
         for (const e of S.units){ if (e.side === s || e.dead) continue; const d = Math.abs(e.x - gate); if (d < bd){ bd = d; best = e; } }
         const n = defenders(s, i);
         if (best){
-          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)); sd.defK = (sd.defK + 1) % n; sd.defAt = S.t;   // they take turns evenly
+          sd.defT = 1.4 / (n*(1 + .06*sd.up.rapid)*bm(sd, 'rapid')*bm(sd, 'garrison'));   // Garrison boosts: the walls shoot a little more often sd.defK = (sd.defK + 1) % n; sd.defAt = S.t;   // they take turns evenly
           const [mx, mh] = defMuzzle(s, i, sd.defK % n, n);
-          fire(s, STATS[sd.age].rng.proj, mx, .5, mh, 11*POW(sd.age)*(1 + .1*sd.up.towers), 'def', best, -1, 0);
+          fire(s, STATS[sd.age].rng.proj, mx, .5, mh, 11*POW(sd.age)*(1 + .1*sd.up.towers)*bm(sd, 'towers'), 'def', best, -1, 0);
         } else sd.defT = .2;
       }
     });
@@ -2879,10 +2899,10 @@ function update(dt){
     if (f.k === 'gas') for (const e of S.units) if (e.side !== f.side && !e.dead && Math.abs(e.x - f.x) <= BARRAGE_R*1.1) hurtUnit(e, f.dps*dt*(statOf(e).d.f === 'v' ? .3 : e.role === 'heavy' ? .6 : 1), 'gas');
     if (f.k === 'barrage' && !f.hit && f.t >= f.dur*.72){
       f.hit = true;
-      const B = BARRAGE[f.age], gas = B.kind === 'gas', dmg = 70*POW(f.age)*(1 + .1*f.lvl)*(gas ? .4 : 1), foe = 1 - f.side;
+      const B = BARRAGE[f.age], gas = B.kind === 'gas', dmg = BARRAGE_DMG*POW(f.age)*(1 + .1*f.lvl)*(gas ? .4 : 1), foe = 1 - f.side;
       for (const e of S.units) if (e.side !== f.side && !e.dead && Math.abs(e.x - f.x) <= BARRAGE_R) hurtUnit(e, e.role === 'heavy' ? dmg*.6 : dmg, 'unit');
       if (Math.abs(f.x - front(foe)) <= BARRAGE_R) hurtBase(foe, dmg*.3);
-      if (gas) S.fx.push({k:'gas', side:f.side, x:f.x, t:0, dur:4.5, dps:70*POW(f.age)*(1 + .1*f.lvl)*.16, seed:Math.random()*1000});   // the cloud hangs about and keeps choking
+      if (gas) S.fx.push({k:'gas', side:f.side, x:f.x, t:0, dur:4.5, dps:BARRAGE_DMG*POW(f.age)*(1 + .1*f.lvl)*.16, seed:Math.random()*1000});   // the cloud hangs about and keeps choking
       const boomy = ['ball','bomb','shell','drone','laser'].includes(B.kind);
       for (let k = 0; k < (boomy ? 5 : 4); k++) S.fx.push({k: boomy ? 'boom' : 'dust', x: f.x + (Math.random() - .5)*BARRAGE_R*1.6, z: Math.random(), t:0, dur: boomy ? .55 : .9, big: boomy, seed: Math.random()});
       sfx(boomy ? 'boom' : 'thud', f.x);
@@ -4286,7 +4306,7 @@ function syncUI(){
     else { setTxt(ui.qtxt, AGES[age].name); setVar(ui.qbar, 0); }
     const rs = sd.res.length > 0;
     if (ui.rtxt.hidden === rs){ ui.rtxt.hidden = !rs; ui.rwrap.hidden = !rs; }
-    if (rs){ const r = sd.res[0]; setTxt(ui.rtxt, r.boost ? `Research: Boost +${(sd.boost || 0) + 1}%` : `Research: ${UPG[r.kind].label} ${sd.up[r.kind] + 1}` + (sd.res.length > 1 ? ` +${sd.res.length - 1}` : '')); setVar(ui.rbar, r.t / r.dur); }
+    if (rs){ const r = sd.res[0]; setTxt(ui.rtxt, r.boost ? `Research: ${UPG[r.kind].label} boost` : `Research: ${UPG[r.kind].label} ${sd.up[r.kind] + 1}` + (sd.res.length > 1 ? ` +${sd.res.length - 1}` : '')); setVar(ui.rbar, r.t / r.dur); }
     const full = sd.q.length >= qCap(sd);
     for (const r of ROLES){ const b = ui.units[r]; setOff(b, full || sd.gold < STATS[age][r].cost); badge(b, sd.q.filter(x => x.r === r).length); }
     setOff(ui.acts.cancel, !sd.q.length);
@@ -4312,7 +4332,7 @@ function syncUI(){
     setOff(ab, !aReady); ab.classList.toggle('glow', aReady); setVar(ab.querySelector('.prog'), Math.min(1, sd.xp/need)); badge(ab, last ? (sd.rank || 0) : age + 1);
     if (!ui.panel.hidden){
       const hv = ui.hover && UPG[ui.hover], line = sd.res.length ? 'In line: ' + sd.res.map(r => r.boost ? 'Boost' : UPG[r.kind].label).join(', ') : 'Pick up to three. They are researched in order.';
-      const info = hv && canBoost(sd, ui.hover) ? `<b>${hv.label}</b> is maxed. <b>Boost</b>: +1% health and damage for all your troops (now +${sd.boost || 0}%)`
+      const info = hv && canBoost(sd, ui.hover) ? `<b>${hv.label}</b> is maxed. <b>Boost</b>: +1% to ${BOOST_WHAT[ui.hover]} (now +${(sd.bst && sd.bst[ui.hover]) || 0}%)`
         : hv ? `<b>${hv.label}</b>: ${hv.desc}` + (age < hv.age ? `. Unlocks in the ${AGES[hv.age].name}` : maxLvl(ui.hover, age) < hv.cap ? '. More levels next age' : '') : line;
       if (ui.upq._h !== info){ ui.upq._h = info; ui.upq.innerHTML = info; }
       for (const k of UPG_KEYS){
@@ -4619,7 +4639,7 @@ function hostSnap(){
   const fresh = list => { const out = []; for (const o of list) if (!o._sent){ o._sent = 1; const c = {...o}; delete c._sent; out.push(c); } return out; };
   sendAll({t:'snap', st:S.t, ot:!!S.overtime, over:S.over, shake:S.shake,
     sides:S.sides.map(side => side.seats.map(sd => ({kind:sd.kind, gold:sd.gold, q:sd.q, qt:sd.qt, def:sd.def, up:sd.up, res:sd.res, bar:sd.bar,
-      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, defAt:sd.defAt, age:sd.age, xp:sd.xp, rank:sd.rank || 0, boost:sd.boost || 0, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
+      hp:sd.hp, max:sd.max, alive:sd.alive, shake:sd.shake, defT:sd.defT, defK:sd.defK, defAt:sd.defAt, age:sd.age, xp:sd.xp, rank:sd.rank || 0, bst:sd.bst || {}, repaired:!!sd.repaired, focus:sd.focus, usedXp:sd.usedXp, usedGold:sd.usedGold, rally:sd.rally, healPref:sd.healPref}))), zones:S.zones,
     units:S.units.map(u => [u.id, u.side, u.seat, u.role, u.age, Math.round(u.x*10)/10, Math.round(u.z*1000)/1000, Math.round(u.hp), Math.round(u.max), u.lunge > 0 ? 1 : 0, u.col, u.hit > 0 ? 1 : 0, u.civ || 0, u.back ? 1 : 0]),
     shots:fresh(S.shots), fx:fresh(S.fx), msgs:fresh(S.msgs), snd:NET.sounds.splice(0)});
 }
